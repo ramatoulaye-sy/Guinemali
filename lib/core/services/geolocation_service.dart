@@ -1,0 +1,235 @@
+import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart';
+import '../constants/app_constants.dart';
+import 'storage_service.dart';
+import 'sync_service.dart';
+import 'supabase_service.dart';
+import 'package:uuid/uuid.dart';
+import 'dart:async';
+
+/// Service de géolocalisation pour obtenir la position de l'utilisateur
+class GeolocationService {
+  static GeolocationService? _instance;
+  static GeolocationService get instance => _instance ??= GeolocationService._();
+  
+  GeolocationService._();
+  final _uuid = const Uuid();
+  StreamSubscription<Position>? _trackingSubscription;
+
+  /// Vérifie et demande les permissions de localisation
+  Future<bool> checkPermissions() async {
+    try {
+      // Vérifier le statut du service de localisation
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        throw Exception('Service de localisation désactivé');
+      }
+
+      // Vérifier les permissions
+      LocationPermission permission = await Geolocator.checkPermission();
+      
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          throw Exception('Permission de localisation refusée');
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        throw Exception('Permission de localisation refusée définitivement');
+      }
+
+      // Demander la permission de localisation en arrière-plan
+      final backgroundPermission = await Permission.locationAlways.request();
+      if (backgroundPermission != PermissionStatus.granted) {
+        if (AppConstants.enableLogging) {
+          print('⚠️ Permission de localisation en arrière-plan non accordée');
+        }
+      }
+
+      if (AppConstants.enableLogging) {
+        print('✅ Permissions de localisation accordées');
+      }
+
+      return true;
+    } catch (e) {
+      if (AppConstants.enableLogging) {
+        print('❌ Erreur permissions de localisation: $e');
+      }
+      rethrow;
+    }
+  }
+
+  /// Obtient la position actuelle de l'utilisateur
+  Future<Position> getCurrentPosition() async {
+    try {
+      // Vérifier les permissions d'abord
+      await checkPermissions();
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 10),
+      );
+
+      if (AppConstants.enableLogging) {
+        print('✅ Position obtenue: ${position.latitude}, ${position.longitude}');
+      }
+
+      return position;
+    } catch (e) {
+      if (AppConstants.enableLogging) {
+        print('❌ Erreur obtention position: $e');
+      }
+      rethrow;
+    }
+  }
+
+  /// Obtient la dernière position connue (plus rapide mais potentiellement obsolète)
+  Future<Position?> getLastKnownPosition() async {
+    try {
+      final position = await Geolocator.getLastKnownPosition();
+      
+      if (position != null && AppConstants.enableLogging) {
+        print('✅ Dernière position connue: ${position.latitude}, ${position.longitude}');
+      }
+
+      return position;
+    } catch (e) {
+      if (AppConstants.enableLogging) {
+        print('❌ Erreur dernière position: $e');
+      }
+      return null;
+    }
+  }
+
+  /// Surveille les changements de position en temps réel
+  Stream<Position> watchPosition({LocationAccuracy accuracy = LocationAccuracy.high, int distanceFilter = 10}) {
+    return Geolocator.getPositionStream(
+      locationSettings: LocationSettings(
+        accuracy: accuracy,
+        distanceFilter: distanceFilter, // Mise à jour selon filtre
+      ),
+    );
+  }
+
+  /// Démarre l'enregistrement de positions locales associées à une alerte
+  Stream<Position> startBackgroundTracking(String alertId) {
+    // Annuler l'ancien tracking si présent
+    _trackingSubscription?.cancel();
+    final stream = watchPosition(accuracy: LocationAccuracy.high, distanceFilter: 15);
+    _trackingSubscription = stream.listen((pos) async {
+      try {
+        final locationId = _uuid.v4();
+        await StorageService.instance.saveLocation(
+          id: locationId,
+          alertId: alertId,
+          latitude: pos.latitude,
+          longitude: pos.longitude,
+          accuracy: pos.accuracy,
+          timestamp: pos.timestamp,
+        );
+        
+        // Tenter de synchroniser immédiatement
+        try {
+          await SupabaseService.instance.insert('positions_alertes', {
+            'id': locationId,
+            'alerte_id': alertId,
+            'latitude': pos.latitude,
+            'longitude': pos.longitude,
+            'accuracy': pos.accuracy,
+            'timestamp': pos.timestamp,
+          });
+          await StorageService.instance.markLocationSynced(locationId);
+          if (AppConstants.enableLogging) {
+            print('📍 Position synchronisée: ${pos.latitude}, ${pos.longitude}');
+          }
+        } catch (e) {
+          // En cas d'échec, ajouter à la file de synchronisation
+          if (AppConstants.enableLogging) {
+            print('⚠️ Sync position échouée, ajout à la file: $e');
+          }
+          await SyncService.instance.addToSyncQueue('position', {
+            'id': locationId,
+            'alerte_id': alertId,
+            'latitude': pos.latitude,
+            'longitude': pos.longitude,
+            'accuracy': pos.accuracy,
+            'timestamp': pos.timestamp,
+          });
+        }
+        
+        if (AppConstants.enableLogging) {
+          print('📍 Position sauvegardée localement: ${pos.latitude}, ${pos.longitude}');
+        }
+      } catch (e) {
+        if (AppConstants.enableLogging) {
+          print('❌ Erreur sauvegarde position: $e');
+        }
+      }
+    });
+    return stream;
+  }
+
+  /// Arrête le tracking en arrière-plan
+  Future<void> stopBackgroundTracking() async {
+    await _trackingSubscription?.cancel();
+    _trackingSubscription = null;
+    if (AppConstants.enableLogging) {
+      print('🛑 Tracking GPS arrêté');
+    }
+  }
+
+  /// Calcule la distance entre deux points géographiques
+  double calculateDistance(
+    double startLatitude,
+    double startLongitude,
+    double endLatitude,
+    double endLongitude,
+  ) {
+    return Geolocator.distanceBetween(
+      startLatitude,
+      startLongitude,
+      endLatitude,
+      endLongitude,
+    );
+  }
+
+  /// Vérifie si l'utilisateur est dans un rayon donné d'un point
+  bool isWithinRadius(
+    double userLat,
+    double userLon,
+    double centerLat,
+    double centerLon,
+    double radiusInMeters,
+  ) {
+    final distance = calculateDistance(userLat, userLon, centerLat, centerLon);
+    return distance <= radiusInMeters;
+  }
+
+  /// Formate une position en chaîne de caractères
+  String formatPosition(Position position, {int precision = 6}) {
+    return '${position.latitude.toStringAsFixed(precision)}, ${position.longitude.toStringAsFixed(precision)}';
+  }
+
+  /// Obtient l'adresse approximative à partir des coordonnées (nécessite un service de géocodage)
+  Future<String> getAddressFromCoordinates(double latitude, double longitude) async {
+    // TODO: Implémenter avec un service de géocodage gratuit
+    // Pour l'instant, retourner les coordonnées
+    return 'Lat: ${latitude.toStringAsFixed(4)}, Lon: ${longitude.toStringAsFixed(4)}';
+  }
+
+  /// Ouvre la position dans l'application de cartes par défaut
+  Future<void> openInMaps(double latitude, double longitude) async {
+    // TODO: Implémenter l'ouverture dans Google Maps ou OpenStreetMap
+    if (AppConstants.enableLogging) {
+      print('📍 Ouverture des cartes pour: $latitude, $longitude');
+    }
+  }
+
+  /// Nettoie les ressources
+  void dispose() {
+    if (AppConstants.enableLogging) {
+      print('✅ GeolocationService nettoyé');
+    }
+  }
+}
