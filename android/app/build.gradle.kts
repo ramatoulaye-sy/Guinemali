@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.example.guinemali"
-    compileSdk = 34  // Aligné sur Android 14 pour compatibilité AGP/SDK
+    compileSdk = 36  // Requis par certains plugins (camera_android, media3, etc.)
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -34,7 +34,7 @@ android {
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 23  // Mettre à jour vers 23 pour record_android
-        targetSdk = 34  // Aligné sur Android 14 pour compatibilité
+        targetSdk = 34  // Peut rester à 34; compileSdk gère les ABI/compat
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         

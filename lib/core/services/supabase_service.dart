@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../constants/app_constants.dart';
+import '../config/supabase_config.dart';
 
 /// Service principal pour la gestion de Supabase
 /// Singleton pour gérer la connexion et les opérations de base
@@ -34,20 +34,22 @@ class SupabaseService {
   /// Initialise Supabase avec les configurations
   static Future<void> initialize() async {
     try {
+      // Vérifier la configuration
+      if (!SupabaseConfig.isConfigured) {
+        throw Exception(SupabaseConfig.configurationError);
+      }
+      
       await Supabase.initialize(
-        url: AppConstants.supabaseUrl,
-        anonKey: AppConstants.supabaseAnonKey,
-        debug: AppConstants.enableDebugMode,
+        url: SupabaseConfig.url,
+        anonKey: SupabaseConfig.anonKey,
+        debug: true, // Activer le debug pour le développement
       );
       _initialized = true;
       
-      if (AppConstants.enableLogging) {
-        print('✅ Supabase initialisé avec succès');
-      }
+      print('✅ Supabase initialisé avec succès');
+      print('🔗 URL: ${SupabaseConfig.url}');
     } catch (e) {
-      if (AppConstants.enableLogging) {
-        print('❌ Erreur lors de l\'initialisation de Supabase: $e');
-      }
+      print('❌ Erreur lors de l\'initialisation de Supabase: $e');
       rethrow;
     }
   }
@@ -69,15 +71,11 @@ class SupabaseService {
         data: data,
       );
       
-      if (AppConstants.enableLogging) {
-        print('✅ Inscription réussie pour: $email');
-      }
+      print('✅ Inscription réussie pour: $email');
       
       return response;
     } catch (e) {
-      if (AppConstants.enableLogging) {
-        print('❌ Erreur lors de l\'inscription: $e');
-      }
+      print('❌ Erreur lors de l\'inscription: $e');
       rethrow;
     }
   }
@@ -94,15 +92,11 @@ class SupabaseService {
         password: password,
       );
       
-      if (AppConstants.enableLogging) {
-        print('✅ Connexion réussie pour: $email');
-      }
+      print('✅ Connexion réussie pour: $email');
       
       return response;
     } catch (e) {
-      if (AppConstants.enableLogging) {
-        print('❌ Erreur lors de la connexion: $e');
-      }
+      print('❌ Erreur lors de la connexion: $e');
       rethrow;
     }
   }
@@ -112,13 +106,9 @@ class SupabaseService {
     try {
       await client.auth.signOut();
       
-      if (AppConstants.enableLogging) {
-        print('✅ Déconnexion réussie');
-      }
+      print('✅ Déconnexion réussie');
     } catch (e) {
-      if (AppConstants.enableLogging) {
-        print('❌ Erreur lors de la déconnexion: $e');
-      }
+      print('❌ Erreur lors de la déconnexion: $e');
       rethrow;
     }
   }
@@ -128,13 +118,9 @@ class SupabaseService {
     try {
       await client.auth.resetPasswordForEmail(email);
       
-      if (AppConstants.enableLogging) {
-        print('✅ Email de réinitialisation envoyé à: $email');
-      }
+      print('✅ Email de réinitialisation envoyé à: $email');
     } catch (e) {
-      if (AppConstants.enableLogging) {
-        print('❌ Erreur lors de la réinitialisation: $e');
-      }
+      print('❌ Erreur lors de la réinitialisation: $e');
       rethrow;
     }
   }
@@ -178,15 +164,11 @@ class SupabaseService {
 
       final response = await query;
       
-      if (AppConstants.enableLogging) {
-        print('✅ SELECT réussi sur $table: ${response.toString()}');
-      }
+      print('✅ SELECT réussi sur $table: ${response.toString()}');
       
       return response;
     } catch (e) {
-      if (AppConstants.enableLogging) {
-        print('❌ Erreur SELECT sur $table: $e');
-      }
+      print('❌ Erreur SELECT sur $table: $e');
       rethrow;
     }
   }
@@ -203,15 +185,11 @@ class SupabaseService {
           .insert(data)
           .select();
       
-      if (AppConstants.enableLogging) {
-        print('✅ INSERT réussi sur $table');
-      }
+      print('✅ INSERT réussi sur $table');
       
       return response;
     } catch (e) {
-      if (AppConstants.enableLogging) {
-        print('❌ Erreur INSERT sur $table: $e');
-      }
+      print('❌ Erreur INSERT sur $table: $e');
       rethrow;
     }
   }
@@ -231,15 +209,11 @@ class SupabaseService {
           .eq(idColumn, idValue)
           .select();
       
-      if (AppConstants.enableLogging) {
-        print('✅ UPDATE réussi sur $table');
-      }
+      print('✅ UPDATE réussi sur $table');
       
       return response;
     } catch (e) {
-      if (AppConstants.enableLogging) {
-        print('❌ Erreur UPDATE sur $table: $e');
-      }
+      print('❌ Erreur UPDATE sur $table: $e');
       rethrow;
     }
   }
@@ -258,15 +232,11 @@ class SupabaseService {
           .eq(idColumn, idValue)
           .select();
       
-      if (AppConstants.enableLogging) {
-        print('✅ DELETE réussi sur $table');
-      }
+      print('✅ DELETE réussi sur $table');
       
       return response;
     } catch (e) {
-      if (AppConstants.enableLogging) {
-        print('❌ Erreur DELETE sur $table: $e');
-      }
+      print('❌ Erreur DELETE sur $table: $e');
       rethrow;
     }
   }
@@ -280,15 +250,11 @@ class SupabaseService {
       await SupabaseService.ensureInitialized();
       final response = await client.rpc(functionName, params: params);
       
-      if (AppConstants.enableLogging) {
-        print('✅ RPC $functionName exécuté avec succès');
-      }
+      print('✅ RPC $functionName exécuté avec succès');
       
       return response;
     } catch (e) {
-      if (AppConstants.enableLogging) {
-        print('❌ Erreur RPC $functionName: $e');
-      }
+      print('❌ Erreur RPC $functionName: $e');
       rethrow;
     }
   }
@@ -312,15 +278,11 @@ class SupabaseService {
 
       final url = client.storage.from(bucket).getPublicUrl(path);
       
-      if (AppConstants.enableLogging) {
-        print('✅ Fichier uploadé: $path');
-      }
+      print('✅ Fichier uploadé: $path');
       
       return url;
     } catch (e) {
-      if (AppConstants.enableLogging) {
-        print('❌ Erreur upload fichier: $e');
-      }
+      print('❌ Erreur upload fichier: $e');
       rethrow;
     }
   }
@@ -333,15 +295,11 @@ class SupabaseService {
     try {
       final file = await client.storage.from(bucket).download(path);
       
-      if (AppConstants.enableLogging) {
-        print('✅ Fichier téléchargé: $path');
-      }
+      print('✅ Fichier téléchargé: $path');
       
       return file;
     } catch (e) {
-      if (AppConstants.enableLogging) {
-        print('❌ Erreur téléchargement fichier: $e');
-      }
+      print('❌ Erreur téléchargement fichier: $e');
       rethrow;
     }
   }
@@ -354,13 +312,9 @@ class SupabaseService {
     try {
       await client.storage.from(bucket).remove([path]);
       
-      if (AppConstants.enableLogging) {
-        print('✅ Fichier supprimé: $path');
-      }
+      print('✅ Fichier supprimé: $path');
     } catch (e) {
-      if (AppConstants.enableLogging) {
-        print('❌ Erreur suppression fichier: $e');
-      }
+      print('❌ Erreur suppression fichier: $e');
       rethrow;
     }
   }
@@ -383,15 +337,11 @@ class SupabaseService {
           )
           .subscribe();
 
-      if (AppConstants.enableLogging) {
-        print('✅ Souscription temps réel activée pour $table');
-      }
+      print('✅ Souscription temps réel activée pour $table');
 
       return channel;
     } catch (e) {
-      if (AppConstants.enableLogging) {
-        print('❌ Erreur souscription temps réel: $e');
-      }
+      print('❌ Erreur souscription temps réel: $e');
       rethrow;
     }
   }
@@ -401,13 +351,9 @@ class SupabaseService {
     try {
       await client.removeChannel(channel);
       
-      if (AppConstants.enableLogging) {
-        print('✅ Souscription temps réel annulée');
-      }
+      print('✅ Souscription temps réel annulée');
     } catch (e) {
-      if (AppConstants.enableLogging) {
-        print('❌ Erreur annulation souscription: $e');
-      }
+      print('❌ Erreur annulation souscription: $e');
       rethrow;
     }
   }
@@ -418,9 +364,7 @@ class SupabaseService {
       await client.from('utilisateurs').select('id').limit(1);
       return true;
     } catch (e) {
-      if (AppConstants.enableLogging) {
-        print('❌ Pas de connexion réseau');
-      }
+      print('❌ Pas de connexion réseau');
       return false;
     }
   }
@@ -432,7 +376,6 @@ class SupabaseService {
       print('🔌 Test de connexion Supabase...');
       
       // Test 1: Vérifier si le client est initialisé
-      // (client getter lance une erreur si non initialisé)
       print('✅ Client Supabase initialisé');
       
       // Test 2: Vérifier la connexion en testant une requête simple
@@ -462,8 +405,39 @@ class SupabaseService {
       return {
         'status': 'error',
         'message': 'Erreur de connexion: $e',
-        'client_initialized': client != null,
+        'client_initialized': true,
         'table_accessible': false,
+      };
+    }
+  }
+
+  /// Vérifie la disponibilité d'un pseudo et propose des alternatives
+  Future<Map<String, dynamic>> checkPseudoAvailability(String pseudo) async {
+    try {
+      await SupabaseService.ensureInitialized();
+      print('🔍 Vérification de la disponibilité du pseudo: $pseudo');
+      
+      // Appeler la fonction RPC pour vérifier le pseudo
+      final response = await client.rpc('check_pseudo_availability', params: {
+        'p_pseudo': pseudo,
+      });
+      
+      print('📊 Résultat de la vérification: $response');
+      
+      return {
+        'available': response['available'] ?? false,
+        'message': response['message'] ?? 'Erreur de vérification',
+        'suggestions': response['suggestions'] ?? [],
+        'status': 'success',
+      };
+      
+    } catch (e) {
+      print('❌ Erreur lors de la vérification du pseudo: $e');
+      return {
+        'available': false,
+        'message': 'Erreur lors de la vérification: $e',
+        'suggestions': [],
+        'status': 'error',
       };
     }
   }
@@ -471,8 +445,6 @@ class SupabaseService {
   /// Nettoie les ressources
   void dispose() {
     // Nettoyer les souscriptions et autres ressources si nécessaire
-    if (AppConstants.enableLogging) {
-      print('✅ SupabaseService nettoyé');
-    }
+    print('✅ SupabaseService nettoyé');
   }
 }

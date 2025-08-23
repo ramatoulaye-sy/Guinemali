@@ -50,30 +50,10 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     final auth = Provider.of<AuthProvider>(context, listen: true);
 
     return Scaffold(
+      backgroundColor: Colors.white, // Fond blanc pur
       body: Container(
-        decoration: BoxDecoration(
-          color: Colors.black, // fond neutre pour bandes éventuelles
-          image: const DecorationImage(
-            image: AssetImage('assets/images/femmeguinemali.jpg'),
-            fit: BoxFit.contain, // afficher toute l'image sans recadrage
-            alignment: Alignment.center,
-            colorFilter: ColorFilter.mode(
-              Color.fromRGBO(0, 0, 0, 0.20), // overlay léger
-              BlendMode.darken,
-            ),
-          ),
-        ),
-        foregroundDecoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.black.withValues(alpha: 0.08),
-              Colors.transparent,
-              Colors.black.withValues(alpha: 0.20),
-            ],
-            stops: const [0.0, 0.5, 1.0],
-          ),
+        decoration: const BoxDecoration(
+          color: Colors.white, // Fond blanc pur
         ),
         child: SafeArea(
           child: SingleChildScrollView(
@@ -123,7 +103,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: AppConstants.primaryColor.withValues(alpha: 0.2),
+                  color: const Color(0xFF945ACB).withValues(alpha: 0.2), // Couleur primaire
                   blurRadius: 15,
                   offset: const Offset(0, 6),
                 ),
@@ -151,16 +131,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           Text(
             AppConstants.appName,
             style: theme.textTheme.headlineLarge?.copyWith(
-              color: Colors.white,
+              color: const Color(0xFF945ACB), // Couleur primaire
               fontWeight: FontWeight.bold,
               letterSpacing: 1.2,
-              shadows: [
-                Shadow(
-                  offset: const Offset(0, 2),
-                  blurRadius: 4,
-                  color: Colors.black.withValues(alpha: 0.7),
-                ),
-              ],
             ),
             textAlign: TextAlign.center,
           )
@@ -172,24 +145,15 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               )
               .fadeIn(delay: AppConstants.animationDurationFast),
 
-
-
           // Slogan
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Text(
               AppConstants.appSlogan,
               style: theme.textTheme.titleMedium?.copyWith(
-                color: Colors.white,
+                color: const Color(0xFFEE82EE), // Couleur secondaire
                 fontStyle: FontStyle.italic,
                 fontWeight: FontWeight.w500,
-                shadows: [
-                  Shadow(
-                    offset: const Offset(0, 1),
-                    blurRadius: 2,
-                    color: Colors.black.withValues(alpha: 0.6),
-                  ),
-                ],
               ),
               textAlign: TextAlign.center,
               maxLines: 2,
@@ -216,19 +180,10 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       child: Column(
         children: [
           Text(
-            userName != null && userName.isNotEmpty
-                ? 'Bienvenue, $userName'
-                : 'Bienvenue sur Guinèmali',
+            'Bienvenue dans Guinemali', // Message générique fixe
             style: theme.textTheme.titleLarge?.copyWith(
-              color: Colors.white,
+              color: Colors.black87,
               fontWeight: FontWeight.w600,
-              shadows: [
-                Shadow(
-                  offset: const Offset(0, 2),
-                  blurRadius: 4,
-                  color: Colors.black.withValues(alpha: 0.7),
-                ),
-              ],
             ),
             textAlign: TextAlign.center,
           )
@@ -245,15 +200,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           Text(
             'Une application de sécurité dédiée à la protection des femmes et jeunes filles en Guinée.',
             style: theme.textTheme.bodyLarge?.copyWith(
-              color: Colors.white.withValues(alpha: 0.9),
+              color: const Color(0xFF945ACB), // Couleur primaire
               height: 1.4,
-              shadows: [
-                Shadow(
-                  offset: const Offset(0, 1),
-                  blurRadius: 2,
-                  color: Colors.black.withValues(alpha: 0.5),
-                ),
-              ],
             ),
             textAlign: TextAlign.center,
           )
@@ -310,16 +258,16 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         Container(
           padding: const EdgeInsets.all(AppConstants.paddingMedium),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.2),
+            color: const Color(0xFF945ACB).withValues(alpha: 0.10), // Couleur primaire
             shape: BoxShape.circle,
             border: Border.all(
-              color: Colors.white.withValues(alpha: 0.3),
+              color: const Color(0xFF945ACB).withValues(alpha: 0.25), // Couleur primaire
               width: 1,
             ),
           ),
           child: Icon(
             icon,
-            color: Colors.white,
+            color: const Color(0xFF945ACB), // Couleur primaire
             size: AppConstants.iconSizeLarge,
           ),
         ),
@@ -327,15 +275,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         Text(
           label,
           style: theme.textTheme.labelSmall?.copyWith(
-            color: Colors.white,
+            color: const Color(0xFFEE82EE), // Couleur secondaire
             fontWeight: FontWeight.w500,
-            shadows: [
-              Shadow(
-                offset: const Offset(0, 1),
-                blurRadius: 2,
-                color: Colors.black.withValues(alpha: 0.6),
-              ),
-            ],
           ),
           textAlign: TextAlign.center,
         ),
@@ -371,6 +312,10 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                   fontWeight: FontWeight.w600,
                 ),
               ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF945ACB), // Couleur primaire
+                foregroundColor: Colors.white,
+              ),
             ),
           )
               .animate()
@@ -397,6 +342,10 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                   fontWeight: FontWeight.w600,
                 ),
               ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF945ACB), // Couleur primaire
+                side: const BorderSide(color: Color(0xFF945ACB), width: 1.5), // Couleur primaire
+              ),
             ),
           )
               .animate()
@@ -417,7 +366,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
             child: Text(
               'Besoin d\'aide ?',
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: AppConstants.primaryColor,
+                color: const Color(0xFF945ACB), // Couleur primaire
                 decoration: TextDecoration.underline,
               ),
             ),
@@ -438,15 +387,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           Text(
             'Version ${AppConstants.appVersion}',
             style: theme.textTheme.labelSmall?.copyWith(
-              color: Colors.white.withValues(alpha: 0.7),
-              shadows: [
-                Shadow(
-                  offset: const Offset(0, 1),
-                  blurRadius: 1,
-                  color: Colors.black.withValues(alpha: 0.5),
-                ),
-              ],
+              color: const Color(0xFFEE82EE), // Couleur secondaire
             ),
+            textAlign: TextAlign.center,
           ),
           const SizedBox(height: AppConstants.paddingSmall),
           // Utiliser Wrap pour éviter l'overflow
@@ -459,7 +402,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                 child: Text(
                   'Confidentialité',
                   style: theme.textTheme.labelSmall?.copyWith(
-                    color: AppConstants.primaryColor,
+                    color: const Color(0xFF945ACB), // Couleur primaire
                   ),
                 ),
               ),
@@ -474,7 +417,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                 child: Text(
                   'Conditions',
                   style: theme.textTheme.labelSmall?.copyWith(
-                    color: AppConstants.primaryColor,
+                    color: const Color(0xFF945ACB), // Couleur primaire
                   ),
                 ),
               ),

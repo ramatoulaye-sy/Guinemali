@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:guinemali/core/services/storage_service.dart';
-import 'package:guinemali/core/constants/app_constants.dart';
+import 'package:guinemali/core/services/emergency_contact_service.dart';
+import 'package:guinemali/core/services/geolocation_service.dart';
 
 class VictimEmergencyPlanScreen extends StatefulWidget {
   const VictimEmergencyPlanScreen({super.key});
@@ -15,6 +19,7 @@ class _VictimEmergencyPlanScreenState extends State<VictimEmergencyPlanScreen> {
   final _safePlacesController = TextEditingController();
   final _escapeRoutesController = TextEditingController();
   final _medicalInfoController = TextEditingController();
+  final _smsTemplateController = TextEditingController();
   
   bool _isEditing = false;
   bool _isLoading = false;
@@ -26,12 +31,76 @@ class _VictimEmergencyPlanScreenState extends State<VictimEmergencyPlanScreen> {
     _loadEmergencyPlan();
   }
 
+  // === Actions rapides (réutilisent la logique existante du panneau Actions Rapides) ===
+  void _navigateToSOS(BuildContext context) {
+    HapticFeedback.heavyImpact();
+    // Aller à l'écran principal où se trouve le bouton SOS
+    if (mounted) {
+      context.go('/victim/home');
+      // Message clair pour guider l'utilisateur
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('🚨 Appuyez sur le bouton SOS rouge pour déclencher une alerte d\'urgence'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 4),
+        ),
+      );
+    }
+  }
+
+  Future<void> _startEmergencyCallSequence(BuildContext context) async {
+    HapticFeedback.mediumImpact();
+    try {
+      await EmergencyContactService.instance.callAllContactsWithFallback(
+        callWindow: const Duration(seconds: 25),
+        waitBetween: const Duration(seconds: 5),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur appel d\'urgence: $e')),
+      );
+    }
+  }
+
+  Future<void> _shareLocation(BuildContext context) async {
+    HapticFeedback.selectionClick();
+    try {
+      final pos = await GeolocationService.instance.getCurrentPosition();
+      final lat = pos.latitude.toStringAsFixed(6);
+      final lon = pos.longitude.toStringAsFixed(6);
+      final mapsUrl = 'https://maps.google.com/?q=$lat,$lon';
+      final smsBody = Uri.encodeComponent('Voici ma position: $lat,$lon\n$mapsUrl');
+      final smsUri = Uri.parse('sms:?body=$smsBody');
+
+      if (await canLaunchUrl(smsUri)) {
+        await launchUrl(smsUri, mode: LaunchMode.externalApplication);
+      } else {
+        final mapUri = Uri.parse(mapsUrl);
+        if (await canLaunchUrl(mapUri)) {
+          await launchUrl(mapUri, mode: LaunchMode.externalApplication);
+        }
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('📍 Lien de position prêt')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur partage position: $e')),
+      );
+    }
+  }
+
   @override
   void dispose() {
     _emergencyInstructionsController.dispose();
     _safePlacesController.dispose();
     _escapeRoutesController.dispose();
     _medicalInfoController.dispose();
+    _smsTemplateController.dispose();
     super.dispose();
   }
 
@@ -40,21 +109,25 @@ class _VictimEmergencyPlanScreenState extends State<VictimEmergencyPlanScreen> {
     
     try {
       // Charger le plan d'urgence depuis le stockage local
-      final instructions = await StorageService.instance.getString('emergency_instructions') ?? '';
-      final safePlaces = await StorageService.instance.getString('safe_places') ?? '';
-      final escapeRoutes = await StorageService.instance.getString('escape_routes') ?? '';
-      final medicalInfo = await StorageService.instance.getString('medical_info') ?? '';
+      final instructions = StorageService.instance.getString('emergency_instructions') ?? '';
+      final safePlaces = StorageService.instance.getString('safe_places') ?? '';
+      final escapeRoutes = StorageService.instance.getString('escape_routes') ?? '';
+      final medicalInfo = StorageService.instance.getString('medical_info') ?? '';
+      final smsTemplate = StorageService.instance.getString('emergency_message_template') 
+          ?? 'Alerte SOS – j\'ai besoin d\'aide.\nMa position: {lat},{lon}\n{link}';
       
       _emergencyInstructionsController.text = instructions;
       _safePlacesController.text = safePlaces;
       _escapeRoutesController.text = escapeRoutes;
       _medicalInfoController.text = medicalInfo;
+      _smsTemplateController.text = smsTemplate;
       
       _emergencyPlan = {
         'instructions': instructions,
         'safe_places': safePlaces,
         'escape_routes': escapeRoutes,
         'medical_info': medicalInfo,
+        'sms_template': smsTemplate,
       };
     } catch (e) {
       if (mounted) {
@@ -80,6 +153,7 @@ class _VictimEmergencyPlanScreenState extends State<VictimEmergencyPlanScreen> {
       await StorageService.instance.saveString('safe_places', _safePlacesController.text.trim());
       await StorageService.instance.saveString('escape_routes', _escapeRoutesController.text.trim());
       await StorageService.instance.saveString('medical_info', _medicalInfoController.text.trim());
+      await StorageService.instance.saveString('emergency_message_template', _smsTemplateController.text.trim());
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -255,6 +329,26 @@ class _VictimEmergencyPlanScreenState extends State<VictimEmergencyPlanScreen> {
             hint: 'Ex: Allergies, médicaments, conditions médicales...',
             maxLines: 3,
           ),
+          const SizedBox(height: 24),
+          Text(
+            'Message d\'urgence (SMS)',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildTextArea(
+            controller: _smsTemplateController,
+            label: 'Modèle de SMS',
+            hint: 'Utilisez {lat} {lon} {link} pour insérer la position',
+            maxLines: 3,
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Le message d\'urgence est requis';
+              }
+              return null;
+            },
+          ),
         ],
       ),
     );
@@ -271,9 +365,13 @@ class _VictimEmergencyPlanScreenState extends State<VictimEmergencyPlanScreen> {
       controller: controller,
       maxLines: maxLines,
       validator: validator,
+      style: const TextStyle(color: Colors.black87),
+      cursorColor: Colors.red,
       decoration: InputDecoration(
         labelText: label,
+        labelStyle: const TextStyle(color: Colors.black87),
         hintText: hint,
+        hintStyle: TextStyle(color: Colors.grey.shade500),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
         ),
@@ -286,7 +384,7 @@ class _VictimEmergencyPlanScreenState extends State<VictimEmergencyPlanScreen> {
           borderSide: BorderSide(color: Colors.red.shade600, width: 2),
         ),
         filled: true,
-        fillColor: Colors.grey.shade50,
+        fillColor: Colors.white,
       ),
     );
   }
@@ -321,6 +419,15 @@ class _VictimEmergencyPlanScreenState extends State<VictimEmergencyPlanScreen> {
           Icons.medical_services,
           _emergencyPlan?['medical_info'] ?? 'Aucune information médicale',
           Colors.orange,
+        ),
+        const SizedBox(height: 16),
+        _buildPlanSection(
+          'Message d\'urgence (SMS)',
+          Icons.sms,
+          (_emergencyPlan?['sms_template'] ?? '').toString().isEmpty
+              ? 'Aucun message défini'
+              : (_emergencyPlan?['sms_template'] ?? '') as String,
+          Colors.purple,
         ),
       ],
     );
@@ -426,12 +533,7 @@ class _VictimEmergencyPlanScreenState extends State<VictimEmergencyPlanScreen> {
                 title: 'Déclencher SOS',
                 subtitle: 'Alerte immédiate',
                 color: Colors.red,
-                onTap: () {
-                  // TODO: Naviguer vers le bouton SOS
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Navigation vers SOS à implémenter')),
-                  );
-                },
+                onTap: () => _navigateToSOS(context),
               ),
             ),
             const SizedBox(width: 16),
@@ -441,12 +543,7 @@ class _VictimEmergencyPlanScreenState extends State<VictimEmergencyPlanScreen> {
                 title: 'Appel Urgence',
                 subtitle: 'Contacter les secours',
                 color: Colors.orange,
-                onTap: () {
-                  // TODO: Appeler les services d'urgence
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Appel d\'urgence à implémenter')),
-                  );
-                },
+                onTap: () => _startEmergencyCallSequence(context),
               ),
             ),
           ],
@@ -460,12 +557,7 @@ class _VictimEmergencyPlanScreenState extends State<VictimEmergencyPlanScreen> {
                 title: 'Partager Position',
                 subtitle: 'Envoyer votre localisation',
                 color: Colors.blue,
-                onTap: () {
-                  // TODO: Partager la position
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Partage de position à implémenter')),
-                  );
-                },
+                onTap: () => _shareLocation(context),
               ),
             ),
             const SizedBox(width: 16),
@@ -475,12 +567,7 @@ class _VictimEmergencyPlanScreenState extends State<VictimEmergencyPlanScreen> {
                 title: 'Enregistrer Preuve',
                 subtitle: 'Capturer des éléments',
                 color: Colors.green,
-                onTap: () {
-                  // TODO: Naviguer vers l'enregistrement des preuves
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Navigation vers les preuves à implémenter')),
-                  );
-                },
+                onTap: () => context.push('/victim/record-evidence'),
               ),
             ),
           ],

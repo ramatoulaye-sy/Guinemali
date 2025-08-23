@@ -1,20 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
-import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
-import '../../l10n/app_localizations.dart';
-import '../../core/constants/app_constants.dart';
-import '../../core/providers/auth_provider.dart';
-import '../../core/services/alert_service.dart';
-import '../../core/services/geolocation_service.dart';
-import '../../core/services/storage_service.dart';
-import '../../core/services/emergency_contact_service.dart';
-import '../../core/services/audio_recording_service.dart';
-import '../../core/services/sync_service.dart';
+import 'package:geolocator/geolocator.dart';
 
-/// Écran affiché quand une alerte d'urgence est active
-/// Permet à la victime de suivre l'état de l'alerte et d'annuler si nécessaire
+import '../../core/theme/app_theme.dart';
+import '../../core/services/emergency_contact_service.dart';
+import 'dart:async';
+
+/// Écran d'alerte d'urgence active avec toutes les fonctionnalités
 class VictimActiveAlertScreen extends StatefulWidget {
   const VictimActiveAlertScreen({super.key});
 
@@ -26,534 +18,331 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
     with TickerProviderStateMixin {
   late AnimationController _pulseController;
   late AnimationController _statusController;
-  bool _isLoading = false;
-  bool _isDataLoading = true;
-  String? _currentAlertId;
-  Map<String, dynamic>? _alertData;
+  
+  DateTime? _alertStartTime;
+  Duration _elapsedTime = Duration.zero;
+  Position? _currentPosition;
+  bool _isGpsTracking = false;
+  bool _isAudioRecording = false;
+  bool _isSynchronizing = false;
+  
+  // Timer pour mettre à jour le temps écoulé
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
     _initializeAnimations();
-    _loadCurrentAlert();
-  }
-
-  void _initializeAnimations() {
-    _pulseController = AnimationController(
-      duration: const Duration(seconds: 1),
-      vsync: this,
-    )..repeat();
-
-    _statusController = AnimationController(
-      duration: const Duration(milliseconds: 500),
-      vsync: this,
-    );
-  }
-
-  Future<void> _loadCurrentAlert() async {
-    try {
-      setState(() {
-        _isDataLoading = true;
-      });
-
-      final alerts = await AlertService.instance.getActiveAlerts();
-      if (alerts.isNotEmpty) {
-        final alert = alerts.first;
-        setState(() {
-          _currentAlertId = alert.id;
-          _alertData = {
-            'id': alert.id,
-            'type': alert.typeAlerte,
-            'danger_level': alert.niveauDanger,
-            'timestamp': alert.timestamp,
-            'latitude': alert.latitude,
-            'longitude': alert.longitude,
-          };
-          _isDataLoading = false;
-        });
-        
-        // Démarrer le mode d'urgence après avoir chargé les données
-        _startEmergencyMode();
-      } else {
-        // Fallback: tenter de charger une alerte locale non synchronisée
-        try {
-          final localAlerts = await StorageService.instance.getLocalAlerts();
-          if (localAlerts.isNotEmpty) {
-            final alert = localAlerts.first;
-            setState(() {
-              _currentAlertId = alert['id'] as String;
-              _alertData = alert;
-              _isDataLoading = false;
-            });
-            _startEmergencyMode();
-            return;
-          }
-        } catch (_) {}
-
-        // Aucune alerte trouvée
-        if (mounted) {
-          final l10n = AppLocalizations.of(context)!;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(l10n.noActiveAlertBody),
-              backgroundColor: AppConstants.warningColor,
-            ),
-          );
-          context.go(AppConstants.routeVictimHome);
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isDataLoading = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erreur chargement alerte: $e'),
-            backgroundColor: AppConstants.errorColor,
-          ),
-        );
-      }
-    }
-  }
-
-  void _startEmergencyMode() {
-    // Vibration continue pour attirer l'attention
-    HapticFeedback.heavyImpact();
-    
-    // Démarrer les animations
-    _statusController.forward();
-    
-    // Notifier les contacts d'urgence
-    _notifyEmergencyContacts();
-  }
-
-  Future<void> _notifyEmergencyContacts() async {
-    try {
-      // Cette fonction sera appelée par AlertService
-      if (AppConstants.enableLogging) {
-        print('✅ Contacts d\'urgence notifiés');
-      }
-    } catch (e) {
-      if (AppConstants.enableLogging) {
-        print('❌ Erreur notification contacts: $e');
-      }
-    }
-  }
-
-  Future<void> _cancelAlert() async {
-    if (_currentAlertId == null || _isLoading) return;
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      await AlertService.instance.cancelAlert(_currentAlertId!);
-      // Arrêter le tracking GPS
-      await GeolocationService.instance.stopBackgroundTracking();
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Alerte annulée avec succès'),
-            backgroundColor: AppConstants.successColor,
-          ),
-        );
-        
-        // Retourner à l'écran d'accueil
-        context.go(AppConstants.routeVictimHome);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erreur annulation: $e'),
-            backgroundColor: AppConstants.errorColor,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _callEmergencyServices() async {
-    try {
-      // Appeler séquentiellement les contacts d'urgence
-      await EmergencyContactService.instance.startOrContinueCallSequence();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erreur appel: $e'),
-            backgroundColor: AppConstants.errorColor,
-          ),
-        );
-      }
-    }
+    _startAlert();
+    _startTimer();
+    _checkStatus();
   }
 
   @override
   void dispose() {
     _pulseController.dispose();
     _statusController.dispose();
+    _timer?.cancel();
     super.dispose();
+  }
+
+  void _initializeAnimations() {
+    _pulseController = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    )..repeat();
+
+    _statusController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    )..repeat();
+  }
+
+  void _startAlert() {
+    _alertStartTime = DateTime.now();
+    _elapsedTime = Duration.zero;
+  }
+
+  void _startTimer() {
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted && _alertStartTime != null) {
+        setState(() {
+          _elapsedTime = DateTime.now().difference(_alertStartTime!);
+        });
+      }
+    });
+  }
+
+  Future<void> _checkStatus() async {
+    // Vérifier le statut GPS
+    final gpsStatus = await Geolocator.isLocationServiceEnabled();
+    final permissionStatus = await Geolocator.checkPermission();
+    
+    setState(() {
+      _isGpsTracking = gpsStatus && permissionStatus == LocationPermission.whileInUse;
+    });
+
+    // Simuler l'enregistrement audio et la synchronisation
+    // TODO: Implémenter la vraie logique
+    setState(() {
+      _isAudioRecording = true;
+      _isSynchronizing = true;
+    });
+
+    // Obtenir la position actuelle
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+      setState(() {
+        _currentPosition = position;
+      });
+    } catch (e) {
+      print('Erreur lors de la récupération de la position: $e');
+    }
+  }
+
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    String hours = twoDigits(duration.inHours);
+    String minutes = twoDigits(duration.inMinutes.remainder(60));
+    String seconds = twoDigits(duration.inSeconds.remainder(60));
+    return '$hours:$minutes:$seconds';
   }
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final authProvider = Provider.of<AuthProvider>(context);
+    return Scaffold(
+      backgroundColor: AppTheme.backgroundColor,
+      appBar: AppBar(
+        title: const Text('Alerte d\'Urgence'),
+        backgroundColor: AppTheme.emergencyColor,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            // Bloc principal d'alerte
+            _buildAlertBlock(),
+            
+            const SizedBox(height: 24),
+            
+            // Bloc de position
+            _buildPositionBlock(),
+            
+            const SizedBox(height: 24),
+            
+            // Bouton d'appel au contact suivant
+            _buildCallNextContactButton(),
+            
+            const SizedBox(height: 24),
+            
+            // Bouton d'annulation de l'alerte
+            _buildCancelAlertButton(),
+            
+            const SizedBox(height: 24),
+            
+            // Message de réconfort
+            _buildComfortMessage(),
+          ],
+        ),
+      ),
+    );
+  }
 
-    // Afficher un indicateur de chargement si les données ne sont pas encore chargées
-    if (_isDataLoading) {
-      return Scaffold(
-        backgroundColor: AppConstants.backgroundColor,
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+  /// Construit le bloc principal d'alerte
+  Widget _buildAlertBlock() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.emergencyColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.emergencyColor.withValues(alpha: 0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // En-tête avec titre et timer
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(AppConstants.primaryColor),
+              // Titre de l'alerte
+              Row(
+                children: [
+                  Icon(
+                    Icons.emergency,
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    'Alerte d\'urgence active',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: AppConstants.spacingLarge),
-              Text(
-                l10n.alertLoading,
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: AppConstants.primaryColor,
+              
+              // Timer avec icône
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.timer,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _formatDuration(_elapsedTime),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-        ),
-      );
-    }
-
-    // Afficher un message d'erreur si aucune alerte n'est trouvée
-    if (_alertData == null || _currentAlertId == null) {
-      return Scaffold(
-        backgroundColor: AppConstants.backgroundColor,
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(AppConstants.paddingLarge),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.warning_amber_rounded,
-                  size: 80,
-                  color: AppConstants.warningColor,
-                ),
-                const SizedBox(height: AppConstants.spacingLarge),
-                Text(
-                  l10n.noActiveAlertTitle,
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: AppConstants.spacingMedium),
-                Text(
-                  l10n.noActiveAlertBody,
-                  style: const TextStyle(fontSize: 16),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: AppConstants.spacingLarge),
-                ElevatedButton(
-                  onPressed: () => context.go(AppConstants.routeVictimHome),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppConstants.primaryColor,
-                    foregroundColor: AppConstants.whiteColor,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppConstants.paddingLarge,
-                      vertical: AppConstants.paddingMedium,
-                    ),
-                  ),
-                  child: Text(l10n.backToHome),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Scaffold(
-      backgroundColor: AppConstants.alertActiveColor.withValues(alpha: 0.1),
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                child: Padding(
-                  padding: const EdgeInsets.all(AppConstants.paddingMedium),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-              // En-tête d'urgence
-              _buildEmergencyHeader(l10n),
-              
-              const SizedBox(height: AppConstants.spacingLarge),
-              
-              // Indicateur GPS Tracking
-               _buildGPSTrackingIndicator(),
-               
-               const SizedBox(height: AppConstants.spacingMedium),
-               
-               // Indicateur Audio Recording
-               _buildAudioRecordingIndicator(),
-               
-               const SizedBox(height: AppConstants.spacingMedium),
-               
-               // Indicateur Synchronisation
-               _buildSyncIndicator(),
-               
-               const SizedBox(height: AppConstants.spacingLarge),
-              
-              // Statut de l'alerte
-              _buildAlertStatus(l10n),
-              
-              const SizedBox(height: AppConstants.spacingLarge),
-              
-              // Informations de localisation
-              _buildLocationInfo(l10n),
-              
-              const SizedBox(height: AppConstants.spacingLarge),
-              
-                      // Actions d'urgence
-                      _buildEmergencyActions(l10n),
-                      const SizedBox(height: AppConstants.spacingMedium),
-                    ],
-                  ),
-                ),
+          
+          const SizedBox(height: 24),
+          
+          // Statuts GPS, Audio et Sync
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildStatusItem(
+                icon: Icons.location_on,
+                label: 'Tracking GPS',
+                isActive: _isGpsTracking,
+                color: AppTheme.successColor,
               ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmergencyHeader(AppLocalizations l10n) {
-    return Container(
-      padding: const EdgeInsets.all(AppConstants.paddingMedium),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFFFF0000), Color(0xFFFF4444)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.all(Radius.circular(AppConstants.borderRadiusLarge)),
-      ),
-      child: Row(
-        children: [
-          AnimatedBuilder(
-            animation: _pulseController,
-            builder: (context, child) {
-              return Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.white.withValues(alpha: 0.6),
-                      blurRadius: 15 + (10 * _pulseController.value),
-                      spreadRadius: 3 + (2 * _pulseController.value),
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.emergency,
-                  color: Color(0xFFFF0000),
-                  size: 35,
-                ),
-              );
-            },
-          ),
-          const SizedBox(width: AppConstants.spacingMedium),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  l10n.emergencyActiveTitle,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.5,
-                    shadows: [
-                      Shadow(offset: Offset(0, 2), blurRadius: 4, color: Colors.black38),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  l10n.emergencyActiveSubtitle,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    shadows: [Shadow(offset: Offset(0, 1), blurRadius: 2, color: Colors.black26)],
-                  ),
-                ),
-              ],
-            ),
+              _buildStatusItem(
+                icon: Icons.mic,
+                label: 'Enregistrement\nAudio Auto',
+                isActive: _isAudioRecording,
+                color: AppTheme.warningColor,
+              ),
+              _buildStatusItem(
+                icon: Icons.sync,
+                label: 'Synchronisation',
+                isActive: _isSynchronizing,
+                color: AppTheme.infoColor,
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildAlertStatus(AppLocalizations l10n) {
+  /// Construit un élément de statut
+  Widget _buildStatusItem({
+    required IconData icon,
+    required String label,
+    required bool isActive,
+    required Color color,
+  }) {
     return Container(
-      padding: const EdgeInsets.all(AppConstants.paddingMedium),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Colors.white, Color(0xFFF8F9FA)],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
-        borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
-        boxShadow: [
-          BoxShadow(
-                            color: const Color(0xFF945acb).withValues(alpha: 0.15),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
-            spreadRadius: 0,
-          ),
-        ],
+        color: isActive 
+            ? color.withValues(alpha: 0.2)
+            : Colors.white.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
-                          color: const Color(0xFF945acb).withValues(alpha: 0.1),
-          width: 1,
+          color: isActive ? color : Colors.white.withValues(alpha: 0.3),
+          width: 1.5,
         ),
       ),
       child: Column(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                l10n.alertStatus,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF945acb),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppConstants.paddingMedium,
-                  vertical: AppConstants.paddingSmall,
-                ),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [
-                      Color(0xFFFF0000),
-                      Color(0xFFFF4444),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+          // Icône avec animation si actif
+          if (isActive)
+            AnimatedBuilder(
+              animation: _statusController,
+              builder: (context, child) {
+                return Transform.scale(
+                  scale: 1.0 + (0.2 * _statusController.value),
+                  child: Icon(
+                    icon,
+                    color: color,
+                    size: 24,
                   ),
-                  borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFFF0000).withValues(alpha: 0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Text(
-                  l10n.statusActive,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.5,
-                  ),
-                ),
-              ),
-            ],
+                );
+              },
+            )
+          else
+            Icon(
+              icon,
+              color: Colors.white.withValues(alpha: 0.5),
+              size: 24,
+            ),
+          
+          const SizedBox(height: 8),
+          
+          // Label
+          Text(
+            label,
+            style: TextStyle(
+              color: isActive ? color : Colors.white.withValues(alpha: 0.7),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+            textAlign: TextAlign.center,
           ),
-          const SizedBox(height: AppConstants.spacingMedium),
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFF9800).withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.access_time,
-                  color: Color(0xFFFF9800),
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: AppConstants.spacingSmall),
-              Text(
-                l10n.triggeredAt(_formatTimestamp(_alertData?['timestamp'])),
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Color(0xFF666666),
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppConstants.spacingSmall),
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFF0000).withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.warning,
-                  color: Color(0xFFFF0000),
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: AppConstants.spacingSmall),
-              Text(
-                l10n.dangerLevel(_getDangerLevelText(_alertData?['danger_level'])),
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Color(0xFF666666),
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
+          
+          const SizedBox(height: 4),
+          
+          // Indicateur de statut
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isActive ? color : Colors.white.withValues(alpha: 0.3),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildLocationInfo(AppLocalizations l10n) {
+  /// Construit le bloc de position
+  Widget _buildPositionBlock() {
     return Container(
-      padding: const EdgeInsets.all(AppConstants.paddingMedium),
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppConstants.whiteColor,
-        borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.borderColor),
         boxShadow: [
           BoxShadow(
-            color: AppConstants.alertActiveColor.withValues(alpha: 0.1),
-            blurRadius: 10,
+            color: Colors.grey.shade200,
+            blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
@@ -561,421 +350,236 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            l10n.yourPosition,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: AppConstants.primaryColor,
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacingMedium),
+          // En-tête du bloc position
           Row(
             children: [
-              const Icon(
-                Icons.location_on,
-                color: AppConstants.infoColor,
-                size: 20,
+              Icon(
+                Icons.my_location,
+                color: AppTheme.primaryColor,
+                size: 24,
               ),
-              const SizedBox(width: AppConstants.spacingSmall),
-              Expanded(
-                child: Text(
-                  'Lat: ${_formatCoordinate(_alertData?['latitude'])}, '
-                  'Lon: ${_formatCoordinate(_alertData?['longitude'])}',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppConstants.spacingSmall),
-          Row(
-            children: [
-              const Icon(
-                Icons.people,
-                color: AppConstants.successColor,
-                size: 20,
-              ),
-              const SizedBox(width: AppConstants.spacingSmall),
+              const SizedBox(width: 12),
               Text(
-                l10n.emergencyContactsNotified,
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey,
+                'Votre position',
+                style: TextStyle(
+                  color: AppTheme.textPrimaryColor,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
             ],
           ),
+          
+          const SizedBox(height: 16),
+          
+          // Affichage de la position
+          if (_currentPosition != null) ...[
+            _buildPositionInfo('Latitude', _currentPosition!.latitude.toStringAsFixed(6)),
+            const SizedBox(height: 8),
+            _buildPositionInfo('Longitude', _currentPosition!.longitude.toStringAsFixed(6)),
+            const SizedBox(height: 8),
+            _buildPositionInfo('Précision', '±${_currentPosition!.accuracy.toStringAsFixed(1)}m'),
+            const SizedBox(height: 8),
+            _buildPositionInfo('Altitude', '${_currentPosition!.altitude.toStringAsFixed(1)}m'),
+          ] else ...[
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceColor,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.location_off,
+                    color: AppTheme.textSecondaryColor,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Position en cours de récupération...',
+                    style: TextStyle(
+                      color: AppTheme.textSecondaryColor,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildEmergencyActions(AppLocalizations l10n) {
-    return Column(
+  /// Construit une information de position
+  Widget _buildPositionInfo(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        // Bouton d'appel d'urgence
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: _callEmergencyServices,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppConstants.alertActiveColor,
-              foregroundColor: AppConstants.whiteColor,
-              padding: const EdgeInsets.all(AppConstants.paddingMedium),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
-              ),
-            ),
-            icon: const Icon(Icons.phone_forwarded, size: 24),
-            label: Text(
-              l10n.callNextContact,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+        Text(
+          label,
+          style: TextStyle(
+            color: AppTheme.textSecondaryColor,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
           ),
         ),
-        
-        const SizedBox(height: AppConstants.spacingMedium),
-        
-        // Bouton d'annulation
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: _isLoading ? null : _cancelAlert,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppConstants.errorColor,
-              side: const BorderSide(color: AppConstants.errorColor),
-              padding: const EdgeInsets.all(AppConstants.paddingMedium),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
-              ),
-            ),
-            icon: _isLoading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(AppConstants.errorColor),
-                    ),
-                  )
-                : const Icon(Icons.cancel, size: 24),
-            label: Text(
-              _isLoading ? l10n.cancelling : l10n.cancelAlert,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ),
-        
-        const SizedBox(height: AppConstants.spacingLarge),
-        
-        // Message d'aide
-        Container(
-          padding: const EdgeInsets.all(AppConstants.paddingMedium),
-          decoration: BoxDecoration(
-            color: AppConstants.infoColor.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
-            border: Border.all(
-              color: AppConstants.infoColor.withValues(alpha: 0.3),
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.info_outline,
-                color: AppConstants.infoColor,
-                size: 20,
-              ),
-              const SizedBox(width: AppConstants.spacingSmall),
-              Expanded(
-                child: Text(
-                  l10n.helpMessage,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: AppConstants.infoColor,
-                  ),
-                ),
-              ),
-            ],
+        Text(
+          value,
+          style: TextStyle(
+            color: AppTheme.textPrimaryColor,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            fontFamily: 'monospace',
           ),
         ),
       ],
     );
   }
 
-  String _formatTimestamp(dynamic timestamp) {
-    if (timestamp == null) return 'Maintenant';
-    
-    try {
-      DateTime dateTime;
-      
-      // Si c'est déjà un DateTime
-      if (timestamp is DateTime) {
-        dateTime = timestamp;
-      }
-      // Si c'est une chaîne, essayer de la parser
-      else if (timestamp is String) {
-        if (timestamp.isEmpty) return 'Maintenant';
-        dateTime = DateTime.parse(timestamp);
-      }
-      // Si c'est un autre type, essayer de le convertir
-      else {
-        dateTime = DateTime.parse(timestamp.toString());
-      }
-      
-      final now = DateTime.now();
-      final difference = now.difference(dateTime);
-      
-      if (difference.inMinutes < 1) {
-        return 'À l\'instant';
-      } else if (difference.inMinutes < 60) {
-        return 'Il y a ${difference.inMinutes} min';
-      } else if (difference.inHours < 24) {
-        return 'Il y a ${difference.inHours}h';
-      } else {
-        return 'Il y a ${difference.inDays}j';
-      }
-    } catch (e) {
-      if (AppConstants.enableLogging) {
-        print('❌ Erreur formatage timestamp: $e');
-      }
-      return 'Maintenant';
-    }
+  /// Construit le bouton d'appel au contact suivant
+  Widget _buildCallNextContactButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: _callNextContact,
+        icon: const Icon(Icons.phone),
+        label: const Text('Appeler Contact Suivant'),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppTheme.primaryColor,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          elevation: 4,
+        ),
+      ),
+    );
   }
 
-  String _getDangerLevelText(dynamic dangerLevel) {
-    if (dangerLevel == null) return 'Élevé';
-    
-    try {
-      final level = int.tryParse(dangerLevel.toString());
-      switch (level) {
-        case 1:
-          return 'Faible';
-        case 2:
-          return 'Modéré';
-        case 3:
-          return 'Moyen';
-        case 4:
-          return 'Élevé';
-        case 5:
-          return 'Critique';
-        default:
-          return 'Élevé';
-      }
-    } catch (e) {
-      return 'Élevé';
-    }
+  /// Construit le bouton d'annulation de l'alerte
+  Widget _buildCancelAlertButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: _cancelAlert,
+        icon: const Icon(Icons.stop),
+        label: const Text('Annuler l\'Alerte'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppTheme.errorColor,
+          side: BorderSide(color: AppTheme.errorColor, width: 2),
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+    );
   }
 
-  String _formatCoordinate(dynamic coordinate) {
-    if (coordinate == null) return '...';
-    
-    try {
-      final coord = double.tryParse(coordinate.toString());
-      if (coord != null) {
-        return coord.toStringAsFixed(6);
-      }
-      return '...';
-    } catch (e) {
-      return '...';
-    }
-  }
-
-  /// Construire l'indicateur GPS Tracking
-  Widget _buildGPSTrackingIndicator() {
+  /// Construit le message de réconfort
+  Widget _buildComfortMessage() {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: AppConstants.paddingSmall),
-      padding: const EdgeInsets.all(AppConstants.paddingMedium),
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.green.withValues(alpha: 0.1),
-        border: Border.all(color: Colors.green, width: 2),
-        borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.green.withValues(alpha: 0.2),
-            blurRadius: 10,
-            spreadRadius: 2,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: AppTheme.secondaryColor.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.secondaryColor.withValues(alpha: 0.3)),
       ),
-      child: Row(
+      child: Column(
         children: [
-          Container(
-            padding: const EdgeInsets.all(AppConstants.paddingSmall),
-            decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
-            child: const Icon(Icons.gps_fixed, color: Colors.white, size: 24),
+          Icon(
+            Icons.favorite,
+            color: AppTheme.secondaryColor,
+            size: 32,
           ),
-          const SizedBox(width: AppConstants.spacingMedium),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text('Tracking GPS ACTIF', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green)),
-                SizedBox(height: 4),
-                Text('Positions capturées en temps réel', style: TextStyle(fontSize: 14, color: Colors.green)),
-              ],
+          const SizedBox(height: 16),
+          Text(
+            'Vous n\'êtes pas seul(e)',
+            style: TextStyle(
+              color: AppTheme.textPrimaryColor,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
             ),
+            textAlign: TextAlign.center,
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMedium, vertical: AppConstants.paddingSmall),
-            decoration: BoxDecoration(color: Colors.green, borderRadius: BorderRadius.circular(20)),
-            child: const Text('ON', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+          const SizedBox(height: 8),
+          Text(
+            'Notre équipe et vos contacts d\'urgence sont mobilisés pour vous aider. '
+            'Restez calme et en sécurité.',
+            style: TextStyle(
+              color: AppTheme.textSecondaryColor,
+              fontSize: 14,
+              height: 1.4,
+            ),
+            textAlign: TextAlign.center,
           ),
         ],
       ),
     );
   }
 
-  /// Construire l'indicateur Audio Recording
-  Widget _buildAudioRecordingIndicator() {
-    return Consumer<AudioRecordingService>(
-      builder: (context, audioService, child) {
-        final isRecording = audioService.isRecording;
-        final color = isRecording ? Colors.blue : Colors.grey;
-        final statusText = isRecording ? 'ACTIF' : 'INACTIF';
-        final descriptionText = isRecording 
-            ? 'Enregistrement audio en cours' 
-            : 'Enregistrement audio arrêté';
-        
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: AppConstants.paddingSmall),
-          padding: const EdgeInsets.all(AppConstants.paddingMedium),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
-            border: Border.all(color: color, width: 2),
-            borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
-            boxShadow: [
-              BoxShadow(
-                color: color.withValues(alpha: 0.2),
-                blurRadius: 10,
-                spreadRadius: 2,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(AppConstants.paddingSmall),
-                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-                child: Icon(isRecording ? Icons.mic : Icons.mic_off, color: Colors.white, size: 24),
-              ),
-              const SizedBox(width: AppConstants.spacingMedium),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Enregistrement Audio', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
-                    const SizedBox(height: 4),
-                    Text(descriptionText, style: TextStyle(fontSize: 14, color: color.withValues(alpha: 0.8))),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMedium, vertical: AppConstants.paddingSmall),
-                decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(20)),
-                child: Text(statusText, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-              ),
-            ],
-          ),
-        );
-      },
+  // Actions des boutons
+  void _callNextContact() {
+    HapticFeedback.mediumImpact();
+    
+    // Utiliser le service d'urgence pour appeler le contact suivant
+    EmergencyContactService.instance.callAllContactsWithFallback();
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Appel en cours vers le contact suivant...'),
+        backgroundColor: AppTheme.primaryColor,
+        duration: const Duration(seconds: 3),
+      ),
     );
   }
 
-  /// Construire l'indicateur de synchronisation
-  Widget _buildSyncIndicator() {
-    return Consumer<SyncService>(
-      builder: (context, syncService, child) {
-        final isOnline = syncService.isOnline;
-        final isSyncing = syncService.isSyncing;
-        final pendingItems = syncService.pendingItemsCount;
-        final failedItems = syncService.failedItemsCount;
-        
-        Color color;
-        String statusText;
-        String descriptionText;
-        IconData icon;
-        
-        if (isSyncing) {
-          color = Colors.orange;
-          statusText = 'SYNC';
-          descriptionText = 'Synchronisation en cours...';
-          icon = Icons.sync;
-        } else if (!isOnline) {
-          color = Colors.red;
-          statusText = 'HORS-LIGNE';
-          descriptionText = 'Mode hors-ligne activé';
-          icon = Icons.cloud_off;
-        } else if (pendingItems > 0) {
-          color = Colors.blue;
-          statusText = 'EN ATTENTE';
-          descriptionText = '$pendingItems éléments à synchroniser';
-          icon = Icons.cloud_upload;
-        } else if (failedItems > 0) {
-          color = Colors.red;
-          statusText = 'ERREURS';
-          descriptionText = '$failedItems éléments échoués';
-          icon = Icons.error;
-        } else {
-          color = Colors.green;
-          statusText = 'SYNCHRONISÉ';
-          descriptionText = 'Toutes les données sont à jour';
-          icon = Icons.cloud_done;
-        }
-        
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: AppConstants.paddingSmall),
-          padding: const EdgeInsets.all(AppConstants.paddingMedium),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
-            border: Border.all(color: color, width: 2),
-            borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
-            boxShadow: [
-              BoxShadow(
-                color: color.withValues(alpha: 0.2),
-                blurRadius: 10,
-                spreadRadius: 2,
-                offset: const Offset(0, 4),
-              ),
-            ],
+  void _cancelAlert() {
+    HapticFeedback.heavyImpact();
+    
+    // Afficher une boîte de dialogue de confirmation
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Annuler l\'Alerte'),
+        content: const Text(
+          'Êtes-vous sûr de vouloir annuler cette alerte d\'urgence ? '
+          'Cela arrêtera tous les processus en cours.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Continuer'),
           ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(AppConstants.paddingSmall),
-                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-                child: Icon(icon, color: Colors.white, size: 24),
-              ),
-              const SizedBox(width: AppConstants.spacingMedium),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Synchronisation', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
-                    const SizedBox(height: 4),
-                    Text(descriptionText, style: TextStyle(fontSize: 14, color: color.withValues(alpha: 0.8))),
-                  ],
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop(); // Fermer la boîte de dialogue
+              
+              // TODO: Implémenter la logique d'annulation de l'alerte
+              print('🚨 Alerte annulée par l\'utilisateur');
+              
+              // Retour à l'écran précédent
+              Navigator.of(context).pop();
+              
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Alerte annulée avec succès'),
+                  backgroundColor: AppTheme.successColor,
                 ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMedium, vertical: AppConstants.paddingSmall),
-                decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(20)),
-                child: Text(statusText, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-              ),
-            ],
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.errorColor,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Annuler l\'Alerte'),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 }

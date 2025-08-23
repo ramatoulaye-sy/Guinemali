@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../constants/app_constants.dart';
 
 /// Widget pour la navigation par gestes
 class GestureNavigation extends StatelessWidget {

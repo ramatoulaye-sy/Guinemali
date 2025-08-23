@@ -3,8 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:guinemali/core/services/storage_service.dart';
 import 'package:guinemali/core/providers/theme_provider.dart';
 import 'package:guinemali/core/providers/locale_provider.dart';
-import 'package:guinemali/core/constants/app_constants.dart';
 import 'package:guinemali/victim/widgets/settings_form.dart';
+import 'package:guinemali/core/widgets/gps_permission_widget.dart';
 
 class VictimSettingsScreen extends StatefulWidget {
   const VictimSettingsScreen({super.key});
@@ -22,6 +22,7 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> {
   bool _darkMode = false;
   bool _soundEnabled = true;
   bool _vibrationEnabled = true;
+  String _officialEmergencyNumber = '';
   
   @override
   void initState() {
@@ -31,14 +32,15 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> {
 
   Future<void> _loadSettings() async {
     try {
-      _pushNotifications = await StorageService.instance.getBool('push_notifications') ?? true;
-      _smsNotifications = await StorageService.instance.getBool('sms_notifications') ?? true;
-      _emailNotifications = await StorageService.instance.getBool('email_notifications') ?? false;
-      _locationSharing = await StorageService.instance.getBool('location_sharing') ?? true;
-      _autoSync = await StorageService.instance.getBool('auto_sync') ?? true;
-      _darkMode = await StorageService.instance.getBool('dark_mode') ?? false;
-      _soundEnabled = await StorageService.instance.getBool('sound_enabled') ?? true;
-      _vibrationEnabled = await StorageService.instance.getBool('vibration_enabled') ?? true;
+      _pushNotifications = StorageService.instance.getBool('push_notifications', defaultValue: true);
+      _smsNotifications = StorageService.instance.getBool('sms_notifications', defaultValue: true);
+      _emailNotifications = StorageService.instance.getBool('email_notifications', defaultValue: false);
+      _locationSharing = StorageService.instance.getBool('location_sharing', defaultValue: true);
+      _autoSync = StorageService.instance.getBool('auto_sync', defaultValue: true);
+      _darkMode = StorageService.instance.getBool('dark_mode', defaultValue: false);
+      _soundEnabled = StorageService.instance.getBool('sound_enabled', defaultValue: true);
+      _vibrationEnabled = StorageService.instance.getBool('vibration_enabled', defaultValue: true);
+      _officialEmergencyNumber = StorageService.instance.getString('official_emergency_number') ?? '';
       
       if (mounted) {
         setState(() {});
@@ -64,6 +66,18 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Erreur lors de la sauvegarde: $e')),
         );
+      }
+    }
+  }
+
+  Future<void> _saveEmergencyNumber(String value) async {
+    try {
+      await StorageService.instance.saveString('official_emergency_number', value.trim());
+      setState(() => _officialEmergencyNumber = value.trim());
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Numéro d\'urgence sauvegardé')));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $e')));
       }
     }
   }
@@ -152,6 +166,14 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 16),
+                    
+                    // Widget de gestion des permissions GPS
+                    GpsPermissionWidget(
+                      showAsCard: false,
+                      customMessage: 'Configurez les permissions GPS pour assurer votre sécurité.',
+                    ),
+                    
                     const SizedBox(height: 24),
 
                     Text('Préférences', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: Colors.red.shade600)),
@@ -167,6 +189,18 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> {
                         ),
                       ],
                       extras: [
+                        const Divider(),
+                        ListTile(
+                          title: const Text('Numéro d\'urgence officiel'),
+                          subtitle: Text(_officialEmergencyNumber.isEmpty ? '117 (défaut)' : _officialEmergencyNumber),
+                          trailing: const Icon(Icons.edit, size: 16),
+                          onTap: () async {
+                            final value = await _showEmergencyNumberDialog(context, _officialEmergencyNumber);
+                            if (value != null) {
+                              await _saveEmergencyNumber(value);
+                            }
+                          },
+                        ),
                         const Divider(),
                         ListTile(
                           title: const Text('Langue'),
@@ -264,6 +298,30 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> {
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
             ElevatedButton(onPressed: () => Navigator.pop(context, selected), child: const Text('Appliquer')),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<String?> _showEmergencyNumberDialog(BuildContext context, String current) async {
+    final controller = TextEditingController(text: current);
+    return showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Numéro d\'urgence officiel'),
+          content: TextField(
+            controller: controller,
+            keyboardType: TextInputType.phone,
+            decoration: const InputDecoration(
+              hintText: 'Ex: 117',
+              labelText: 'Numéro',
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
+            ElevatedButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('Enregistrer')),
           ],
         );
       },

@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:guinemali/core/models/auth_models.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/models/user_model.dart';
-import '../../core/services/auth_service.dart';
+
 import '../../core/services/supabase_service.dart';
+import '../../core/providers/auth_provider.dart'; // Added import for AuthProvider
 
 /// Écran d'inscription pour l'application Guinèmali
 /// Permet aux nouveaux utilisateurs de créer un compte
@@ -21,6 +23,7 @@ class _RegisterScreenState extends State<RegisterScreen>
     with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _prenomController = TextEditingController();
+  final _pseudoController = TextEditingController(); // Nouveau contrôleur pour le pseudo
   final _pinController = TextEditingController();
   final _confirmPinController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -31,8 +34,10 @@ class _RegisterScreenState extends State<RegisterScreen>
   bool _obscurePin = true;
   bool _obscureConfirmPin = true;
   bool _acceptTerms = false;
+  bool _pseudoValidated = false; // Nouveau: indique si le pseudo a été validé
+  bool _isCheckingPseudo = false; // Nouveau: indique si on vérifie le pseudo
   String? _errorMessage;
-  String _currentStep = 'Prêt';
+
   UserType _selectedUserType = UserType.victime;
   String _selectedLanguage = AppConstants.defaultLanguage;
   String? _selectedRegion;
@@ -80,14 +85,7 @@ class _RegisterScreenState extends State<RegisterScreen>
       ),
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFFF8F9FA),
-              Color(0xFFE9ECEF),
-            ],
-          ),
+          color: Colors.white,
         ),
         child: TabBarView(
           controller: _tabController,
@@ -192,7 +190,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                     if (_formKey.currentState!.validate()) {
                       _tabController.animateTo(2);
                     }
-                  }),
+                  }, enabled: _pseudoValidated), // Désactiver si pseudo non validé
                 ),
               ],
             ),
@@ -360,7 +358,7 @@ class _RegisterScreenState extends State<RegisterScreen>
       margin: const EdgeInsets.only(bottom: AppConstants.paddingMedium),
       child: Card(
         elevation: isSelected ? 8 : 2,
-        color: isSelected ? AppConstants.primaryColor.withOpacity(0.1) : AppConstants.whiteColor,
+        color: isSelected ? AppConstants.primaryColor.withValues(alpha: 0.1) : AppConstants.whiteColor,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
           side: BorderSide(
@@ -387,7 +385,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                     shape: BoxShape.circle,
                     color: isSelected 
                         ? AppConstants.primaryColor 
-                        : AppConstants.primaryColor.withOpacity(0.1),
+                        : AppConstants.primaryColor.withValues(alpha: 0.1),
                   ),
                   child: Icon(
                     _getUserTypeIcon(type),
@@ -446,19 +444,61 @@ class _RegisterScreenState extends State<RegisterScreen>
   Widget _buildInformationForm(ThemeData theme) {
     return Column(
       children: [
-        // Prénom
+        // Pseudo - CHAMP PRINCIPAL À VALIDER EN PREMIER
         TextFormField(
-                          controller: _prenomController,
+          controller: _pseudoController,
+          enabled: !_isCheckingPseudo, // Désactiver pendant la vérification
           decoration: InputDecoration(
-            labelText: 'Prénom *',
-            hintText: 'Entrez votre prénom',
-            prefixIcon: Icon(Icons.person_outline, color: AppConstants.primaryColor),
-            labelStyle: const TextStyle(color: AppConstants.blackColor),
-            hintStyle: TextStyle(color: AppConstants.blackColor.withOpacity(0.6)),
+            labelText: 'Pseudo *',
+            hintText: 'Entrez votre pseudo unique',
+            helperText: '3-20 caractères, lettres et chiffres uniquement',
+            prefixIcon: Icon(Icons.alternate_email, color: AppConstants.primaryColor),
+            suffixIcon: _pseudoValidated 
+              ? Icon(Icons.check_circle, color: AppConstants.successColor)
+              : IconButton(
+                  icon: _isCheckingPseudo 
+                    ? SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(Icons.search, color: AppConstants.primaryColor),
+                  onPressed: _isCheckingPseudo ? null : _checkPseudoAvailability,
+                  tooltip: 'Vérifier la disponibilité',
+                ),
+            labelStyle: TextStyle(
+              color: _pseudoValidated ? AppConstants.successColor : AppConstants.blackColor,
+            ),
+            hintStyle: TextStyle(color: AppConstants.blackColor.withValues(alpha: 0.6)),
+            border: OutlineInputBorder(
+              borderSide: BorderSide(
+                color: _pseudoValidated ? AppConstants.successColor : AppConstants.primaryColor,
+                width: _pseudoValidated ? 2 : 1,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderSide: BorderSide(
+                color: _pseudoValidated ? AppConstants.successColor : AppConstants.primaryColor,
+                width: 2,
+              ),
+            ),
           ),
-          style: const TextStyle(color: AppConstants.blackColor),
-          textInputAction: TextInputAction.next,
-          validator: _validatePrenom,
+          style: TextStyle(
+            color: _pseudoValidated ? AppConstants.successColor : AppConstants.blackColor,
+          ),
+          textInputAction: TextInputAction.done,
+          validator: _validatePseudo,
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]')),
+          ],
+          onChanged: (value) {
+            // Réinitialiser la validation si l'utilisateur modifie le pseudo
+            if (_pseudoValidated && value != _pseudoController.text) {
+              setState(() {
+                _pseudoValidated = false;
+              });
+            }
+          },
         )
             .animate()
             .slideX(begin: -0.3)
@@ -466,24 +506,105 @@ class _RegisterScreenState extends State<RegisterScreen>
 
         const SizedBox(height: AppConstants.paddingMedium),
 
-        // Code PIN
+        // Indicateur de statut du pseudo
+        if (!_pseudoValidated)
+          Container(
+            padding: const EdgeInsets.all(AppConstants.paddingMedium),
+            decoration: BoxDecoration(
+              color: AppConstants.warningColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
+              border: Border.all(color: AppConstants.warningColor.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, color: AppConstants.warningColor, size: 20),
+                const SizedBox(width: AppConstants.paddingSmall),
+                Expanded(
+                  child: Text(
+                    'Veuillez d\'abord valider votre pseudo pour continuer',
+                    style: TextStyle(
+                      color: AppConstants.warningColor,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          )
+            .animate()
+            .slideX(begin: 0.3)
+            .fadeIn(),
+
+        const SizedBox(height: AppConstants.paddingMedium),
+
+        // Prénom - GRISÉ JUSQU'À VALIDATION DU PSEUDO
+        TextFormField(
+          controller: _prenomController,
+          enabled: _pseudoValidated, // Activer seulement après validation du pseudo
+          decoration: InputDecoration(
+            labelText: 'Prénom *',
+            hintText: 'Entrez votre prénom',
+            prefixIcon: Icon(
+              Icons.person_outline, 
+              color: _pseudoValidated ? AppConstants.primaryColor : Colors.grey,
+            ),
+            labelStyle: TextStyle(
+              color: _pseudoValidated ? AppConstants.blackColor : Colors.grey,
+            ),
+            hintStyle: TextStyle(
+              color: _pseudoValidated ? AppConstants.blackColor.withValues(alpha: 0.6) : Colors.grey,
+            ),
+            border: OutlineInputBorder(
+              borderSide: BorderSide(
+                color: _pseudoValidated ? AppConstants.primaryColor : Colors.grey,
+              ),
+            ),
+          ),
+          style: TextStyle(
+            color: _pseudoValidated ? AppConstants.blackColor : Colors.grey,
+          ),
+          textInputAction: TextInputAction.next,
+          validator: _pseudoValidated ? _validatePrenom : null,
+        )
+            .animate()
+            .slideX(begin: 0.3)
+            .fadeIn(),
+
+        const SizedBox(height: AppConstants.paddingMedium),
+
+        // Code PIN - GRISÉ JUSQU'À VALIDATION DU PSEUDO
         TextFormField(
           controller: _pinController,
+          enabled: _pseudoValidated,
           decoration: InputDecoration(
             labelText: 'Code PIN *',
             hintText: 'Créez votre code PIN sécurisé',
-            prefixIcon: const Icon(Icons.lock_outline, color: AppConstants.primaryColor),
+            prefixIcon: Icon(
+              Icons.lock_outline, 
+              color: _pseudoValidated ? AppConstants.primaryColor : Colors.grey,
+            ),
             suffixIcon: IconButton(
               icon: Icon(
                 _obscurePin ? Icons.visibility : Icons.visibility_off,
-                color: AppConstants.primaryColor,
+                color: _pseudoValidated ? AppConstants.primaryColor : Colors.grey,
               ),
-              onPressed: () => setState(() => _obscurePin = !_obscurePin),
+              onPressed: _pseudoValidated ? () => setState(() => _obscurePin = !_obscurePin) : null,
             ),
-            labelStyle: const TextStyle(color: AppConstants.blackColor),
-            hintStyle: TextStyle(color: AppConstants.blackColor.withOpacity(0.6)),
+            labelStyle: TextStyle(
+              color: _pseudoValidated ? AppConstants.blackColor : Colors.grey,
+            ),
+            hintStyle: TextStyle(
+              color: _pseudoValidated ? AppConstants.blackColor.withValues(alpha: 0.6) : Colors.grey,
+            ),
+            border: OutlineInputBorder(
+              borderSide: BorderSide(
+                color: _pseudoValidated ? AppConstants.primaryColor : Colors.grey,
+              ),
+            ),
           ),
-          style: const TextStyle(color: AppConstants.blackColor),
+          style: TextStyle(
+            color: _pseudoValidated ? AppConstants.blackColor : Colors.grey,
+          ),
           obscureText: _obscurePin,
           keyboardType: TextInputType.number,
           textInputAction: TextInputAction.next,
@@ -491,32 +612,47 @@ class _RegisterScreenState extends State<RegisterScreen>
             FilteringTextInputFormatter.digitsOnly,
             LengthLimitingTextInputFormatter(AppConstants.pinMaxLength),
           ],
-          validator: _validatePin,
+          validator: _pseudoValidated ? _validatePin : null,
         )
             .animate()
-            .slideX(begin: 0.3)
+            .slideX(begin: -0.3)
             .fadeIn(delay: AppConstants.animationDurationFast),
 
         const SizedBox(height: AppConstants.paddingMedium),
 
-        // Confirmation PIN
+        // Confirmation PIN - GRISÉ JUSQU'À VALIDATION DU PSEUDO
         TextFormField(
           controller: _confirmPinController,
+          enabled: _pseudoValidated,
           decoration: InputDecoration(
             labelText: 'Confirmer le PIN *',
             hintText: 'Répétez votre code PIN',
-            prefixIcon: const Icon(Icons.lock_outline, color: AppConstants.primaryColor),
+            prefixIcon: Icon(
+              Icons.lock_outline, 
+              color: _pseudoValidated ? AppConstants.primaryColor : Colors.grey,
+            ),
             suffixIcon: IconButton(
               icon: Icon(
                 _obscureConfirmPin ? Icons.visibility : Icons.visibility_off,
-                color: AppConstants.primaryColor,
+                color: _pseudoValidated ? AppConstants.primaryColor : Colors.grey,
               ),
-              onPressed: () => setState(() => _obscureConfirmPin = !_obscureConfirmPin),
+              onPressed: _pseudoValidated ? () => setState(() => _obscureConfirmPin = !_obscureConfirmPin) : null,
             ),
-            labelStyle: const TextStyle(color: AppConstants.blackColor),
-            hintStyle: TextStyle(color: AppConstants.blackColor.withOpacity(0.6)),
+            labelStyle: TextStyle(
+              color: _pseudoValidated ? AppConstants.blackColor : Colors.grey,
+            ),
+            hintStyle: TextStyle(
+              color: _pseudoValidated ? AppConstants.blackColor.withValues(alpha: 0.6) : Colors.grey,
+            ),
+            border: OutlineInputBorder(
+              borderSide: BorderSide(
+                color: _pseudoValidated ? AppConstants.primaryColor : Colors.grey,
+              ),
+            ),
           ),
-          style: const TextStyle(color: AppConstants.blackColor),
+          style: TextStyle(
+            color: _pseudoValidated ? AppConstants.blackColor : Colors.grey,
+          ),
           obscureText: _obscureConfirmPin,
           keyboardType: TextInputType.number,
           textInputAction: TextInputAction.next,
@@ -524,28 +660,43 @@ class _RegisterScreenState extends State<RegisterScreen>
             FilteringTextInputFormatter.digitsOnly,
             LengthLimitingTextInputFormatter(AppConstants.pinMaxLength),
           ],
-          validator: _validateConfirmPin,
+          validator: _pseudoValidated ? _validateConfirmPin : null,
         )
             .animate()
-            .slideX(begin: -0.3)
+            .slideX(begin: 0.3)
             .fadeIn(delay: const Duration(milliseconds: 200)),
 
         const SizedBox(height: AppConstants.paddingMedium),
 
-        // Numéro de téléphone
+        // Numéro de téléphone - GRISÉ JUSQU'À VALIDATION DU PSEUDO
         TextFormField(
           controller: _phoneController,
-          decoration: const InputDecoration(
+          enabled: _pseudoValidated,
+          decoration: InputDecoration(
             labelText: 'Numéro de téléphone',
             hintText: '+224 XXX XX XX XX (optionnel)',
-            prefixIcon: Icon(Icons.phone, color: AppConstants.primaryColor),
-            labelStyle: TextStyle(color: AppConstants.blackColor),
-            hintStyle: TextStyle(color: AppConstants.blackColor),
+            prefixIcon: Icon(
+              Icons.phone, 
+              color: _pseudoValidated ? AppConstants.primaryColor : Colors.grey,
+            ),
+            labelStyle: TextStyle(
+              color: _pseudoValidated ? AppConstants.blackColor : Colors.grey,
+            ),
+            hintStyle: TextStyle(
+              color: _pseudoValidated ? AppConstants.blackColor : Colors.grey,
+            ),
+            border: OutlineInputBorder(
+              borderSide: BorderSide(
+                color: _pseudoValidated ? AppConstants.primaryColor : Colors.grey,
+              ),
+            ),
           ),
-          style: const TextStyle(color: AppConstants.blackColor),
+          style: TextStyle(
+            color: _pseudoValidated ? AppConstants.blackColor : Colors.grey,
+          ),
           keyboardType: TextInputType.phone,
           textInputAction: TextInputAction.next,
-          validator: _validatePhone,
+          validator: _pseudoValidated ? _validatePhone : null,
         )
             .animate()
             .slideX(begin: 0.3)
@@ -553,26 +704,40 @@ class _RegisterScreenState extends State<RegisterScreen>
 
         const SizedBox(height: AppConstants.paddingMedium),
 
-        // Région
+        // Région - GRISÉ JUSQU'À VALIDATION DU PSEUDO
         DropdownButtonFormField<String>(
           value: _selectedRegion,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Région',
-            prefixIcon: Icon(Icons.location_on, color: AppConstants.primaryColor),
-            labelStyle: TextStyle(color: AppConstants.blackColor),
+            prefixIcon: Icon(
+              Icons.location_on, 
+              color: _pseudoValidated ? AppConstants.primaryColor : Colors.grey,
+            ),
+            labelStyle: TextStyle(
+              color: _pseudoValidated ? AppConstants.blackColor : Colors.grey,
+            ),
+            border: OutlineInputBorder(
+              borderSide: BorderSide(
+                color: _pseudoValidated ? AppConstants.primaryColor : Colors.grey,
+              ),
+            ),
           ),
-          style: const TextStyle(color: AppConstants.blackColor),
+          style: TextStyle(
+            color: _pseudoValidated ? AppConstants.blackColor : Colors.grey,
+          ),
           dropdownColor: AppConstants.whiteColor,
           items: AppConstants.guineanRegions.map((region) {
             return DropdownMenuItem<String>(
               value: region,
               child: Text(
                 region,
-                style: const TextStyle(color: AppConstants.blackColor),
+                style: TextStyle(
+                  color: _pseudoValidated ? AppConstants.blackColor : Colors.grey,
+                ),
               ),
             );
           }).toList(),
-          onChanged: (value) => setState(() => _selectedRegion = value),
+          onChanged: _pseudoValidated ? (value) => setState(() => _selectedRegion = value) : null,
         )
             .animate()
             .slideX(begin: -0.3)
@@ -580,15 +745,27 @@ class _RegisterScreenState extends State<RegisterScreen>
 
         const SizedBox(height: AppConstants.paddingMedium),
 
-        // Langue
+        // Langue - GRISÉ JUSQU'À VALIDATION DU PSEUDO
         DropdownButtonFormField<String>(
           value: _selectedLanguage,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Langue préférée',
-            prefixIcon: Icon(Icons.language, color: AppConstants.primaryColor),
-            labelStyle: TextStyle(color: AppConstants.blackColor),
+            prefixIcon: Icon(
+              Icons.language, 
+              color: _pseudoValidated ? AppConstants.primaryColor : Colors.grey,
+            ),
+            labelStyle: TextStyle(
+              color: _pseudoValidated ? AppConstants.blackColor : Colors.grey,
+            ),
+            border: OutlineInputBorder(
+              borderSide: BorderSide(
+                color: _pseudoValidated ? AppConstants.primaryColor : Colors.grey,
+              ),
+            ),
           ),
-          style: const TextStyle(color: AppConstants.blackColor),
+          style: TextStyle(
+            color: _pseudoValidated ? AppConstants.blackColor : Colors.grey,
+          ),
           dropdownColor: AppConstants.whiteColor,
           items: const [
             DropdownMenuItem(
@@ -604,7 +781,7 @@ class _RegisterScreenState extends State<RegisterScreen>
               child: Text('Fulani', style: TextStyle(color: AppConstants.blackColor)),
             ),
           ],
-          onChanged: (value) => setState(() => _selectedLanguage = value!),
+          onChanged: _pseudoValidated ? (value) => setState(() => _selectedLanguage = value!) : null,
         )
             .animate()
             .slideX(begin: 0.3)
@@ -620,9 +797,9 @@ class _RegisterScreenState extends State<RegisterScreen>
       padding: const EdgeInsets.all(AppConstants.paddingMedium),
       margin: const EdgeInsets.only(bottom: AppConstants.paddingMedium),
       decoration: BoxDecoration(
-        color: AppConstants.errorColor.withOpacity(0.1),
+        color: AppConstants.errorColor.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
-        border: Border.all(color: AppConstants.errorColor.withOpacity(0.3)),
+        border: Border.all(color: AppConstants.errorColor.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
@@ -660,7 +837,8 @@ class _RegisterScreenState extends State<RegisterScreen>
             ),
             const SizedBox(height: AppConstants.paddingMedium),
             _buildSummaryRow('Type de compte', _selectedUserType.displayName),
-                         _buildSummaryRow('Prénom', _prenomController.text),
+            _buildSummaryRow('Pseudo', _pseudoController.text),
+            _buildSummaryRow('Prénom', _prenomController.text),
             if (_phoneController.text.isNotEmpty)
               _buildSummaryRow('Téléphone', _phoneController.text),
             if (_selectedRegion != null)
@@ -730,7 +908,7 @@ class _RegisterScreenState extends State<RegisterScreen>
             Container(
               padding: const EdgeInsets.all(AppConstants.paddingSmall),
               decoration: BoxDecoration(
-                color: _acceptTerms ? AppConstants.successColor.withOpacity(0.1) : AppConstants.warningColor.withOpacity(0.1),
+                color: _acceptTerms ? AppConstants.successColor.withValues(alpha: 0.1) : AppConstants.warningColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(AppConstants.borderRadiusSmall),
                 border: Border.all(
                   color: _acceptTerms ? AppConstants.successColor : AppConstants.warningColor,
@@ -790,12 +968,12 @@ class _RegisterScreenState extends State<RegisterScreen>
   }
 
   /// Construit le bouton suivant
-  Widget _buildNextButton(VoidCallback onPressed) {
+  Widget _buildNextButton(VoidCallback onPressed, {bool enabled = true}) {
     return SizedBox(
       width: double.infinity,
       height: 50,
       child: ElevatedButton.icon(
-        onPressed: onPressed,
+        onPressed: enabled ? onPressed : null,
         icon: const Icon(Icons.arrow_forward, color: AppConstants.whiteColor),
         label: const Text('Suivant', style: TextStyle(color: AppConstants.whiteColor)),
       ),
@@ -840,45 +1018,7 @@ class _RegisterScreenState extends State<RegisterScreen>
     );
   }
 
-  /// Teste la connexion Supabase
-  Future<void> _testSupabaseConnection() async {
-    try {
-      print('🧪 === TEST DE CONNEXION SUPABASE ===');
-      
-      final supabase = SupabaseService.instance;
-      final result = await supabase.testConnection();
-      
-      print('📊 Résultat du test: $result');
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              result['status'] == 'success' 
-                ? '✅ ${result['message']}' 
-                : '❌ ${result['message']}'
-            ),
-            backgroundColor: result['status'] == 'success' 
-              ? AppConstants.successColor 
-              : AppConstants.errorColor,
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
-      
-    } catch (e) {
-      print('❌ Erreur lors du test: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('❌ Erreur de test: $e'),
-            backgroundColor: AppConstants.errorColor,
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
-    }
-  }
+
 
   /// Retourne l'icône pour un type d'utilisateur
   IconData _getUserTypeIcon(UserType type) {
@@ -957,6 +1097,135 @@ class _RegisterScreenState extends State<RegisterScreen>
     return null;
   }
 
+  /// Validation du pseudo
+  String? _validatePseudo(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Le pseudo est requis';
+    }
+    if (value.length < 3) {
+      return 'Le pseudo doit contenir au moins 3 caractères';
+    }
+    if (value.length > 20) {
+      return 'Le pseudo ne peut pas dépasser 20 caractères';
+    }
+    // Vérifier qu'il n'y a pas d'espaces ni de caractères spéciaux
+    if (value.contains(' ') || !RegExp(r'^[a-zA-Z0-9]+$').hasMatch(value)) {
+      return 'Le pseudo ne doit contenir que des lettres et chiffres';
+    }
+    return null;
+  }
+
+  /// Vérifie la disponibilité du pseudo via Supabase
+  Future<void> _checkPseudoAvailability() async {
+    final pseudo = _pseudoController.text.trim();
+    
+    if (pseudo.isEmpty) {
+      setState(() {
+        _errorMessage = 'Veuillez saisir un pseudo';
+      });
+      return;
+    }
+
+    // Validation locale d'abord
+    final validationError = _validatePseudo(pseudo);
+    if (validationError != null) {
+      setState(() {
+        _errorMessage = validationError;
+        _pseudoValidated = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _isCheckingPseudo = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // Utiliser l'AuthProvider au lieu du service direct
+      final result = await context.read<AuthProvider>().checkPseudoAvailability(pseudo);
+
+      if (result['status'] == 'success') {
+        if (result['available'] == true) {
+          setState(() {
+            _pseudoValidated = true;
+            _errorMessage = null;
+          });
+          
+          // Afficher un message de succès
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('✅ ${result['message']}'),
+                backgroundColor: AppConstants.successColor,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
+        } else {
+          // Pseudo non disponible, afficher les suggestions
+          final suggestions = List<String>.from(result['suggestions'] ?? []);
+          _showPseudoSuggestions(suggestions);
+        }
+      } else {
+        setState(() {
+          _errorMessage = 'Erreur lors de la vérification: ${result['message']}';
+          _pseudoValidated = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Erreur de connexion: $e';
+        _pseudoValidated = false;
+      });
+    } finally {
+      setState(() {
+        _isCheckingPseudo = false;
+      });
+    }
+  }
+
+  /// Affiche les suggestions de pseudo
+  void _showPseudoSuggestions(List<String> suggestions) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text(
+          'Pseudo déjà utilisé',
+          style: TextStyle(color: AppConstants.blackColor),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Ce pseudo est déjà utilisé. Voici quelques suggestions :',
+              style: TextStyle(color: AppConstants.blackColor),
+            ),
+            const SizedBox(height: 16),
+            ...suggestions.map((suggestion) => ListTile(
+              title: Text(suggestion),
+              trailing: TextButton(
+                onPressed: () {
+                  _pseudoController.text = suggestion;
+                  Navigator.of(context).pop();
+                  _checkPseudoAvailability(); // Vérifier la suggestion
+                },
+                child: const Text('Utiliser'),
+              ),
+            )),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Fermer'),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Gère l'inscription
   Future<void> _handleRegister() async {
     print('🚀 === DÉBUT DE L\'INSCRIPTION ===');
@@ -965,7 +1234,7 @@ class _RegisterScreenState extends State<RegisterScreen>
     setState(() {
       _errorMessage = null;
       _isLoading = true;
-      _currentStep = 'Début de l\'inscription';
+      
     });
 
     try {
@@ -980,7 +1249,7 @@ class _RegisterScreenState extends State<RegisterScreen>
       print('   - Type utilisateur: ${_selectedUserType.displayName}');
       
       // Test de connexion Supabase
-      setState(() => _currentStep = 'Test de connexion Supabase');
+      
       print('🔌 Test de connexion Supabase...');
       try {
         await SupabaseService.ensureInitialized();
@@ -999,30 +1268,20 @@ class _RegisterScreenState extends State<RegisterScreen>
         throw Exception('Impossible de se connecter à la base de données: $e');
       }
       
-      setState(() => _currentStep = 'Récupération du service d\'authentification');
-      final authService = AuthService.instance;
+      
+      
       print('✅ Service d\'authentification récupéré');
       
-      // Vérifier si le prénom est disponible
-      setState(() => _currentStep = 'Vérification de la disponibilité du prénom');
-              print('🔍 Vérification de la disponibilité du prénom: ${_prenomController.text.trim()}');
-      try {
-                  final isAvailable = await authService.isPrenomAvailable(_prenomController.text.trim());
-        print('📊 Résultat vérification prénom: $isAvailable');
-        
-        if (!isAvailable) {
-          throw Exception('Ce prénom est déjà utilisé');
-        }
-        print('✅ Prénom disponible');
-      } catch (e) {
-        print('❌ Erreur lors de la vérification du prénom: $e');
-        throw Exception('Erreur lors de la vérification du prénom: $e');
+      // Vérifier si le pseudo est disponible (déjà fait dans l'étape précédente)
+      if (!_pseudoValidated) {
+        throw Exception('Le pseudo doit être validé avant de continuer');
       }
+      print('✅ Pseudo validé: ${_pseudoController.text.trim()}');
 
-      setState(() => _currentStep = 'Préparation des données d\'inscription');
+      
              final registrationData = RegistrationData(
                    prenom: _prenomController.text.trim(),
-                   pseudo: _prenomController.text.trim(), // Utiliser le prénom comme pseudo
+                   pseudo: _pseudoController.text.trim(), // Utiliser le pseudo saisi par l'utilisateur
          pin: _pinController.text.trim(),
          numTel: _phoneController.text.trim().isEmpty ? '' : _phoneController.text.trim(),
          langue: _selectedLanguage,
@@ -1032,35 +1291,53 @@ class _RegisterScreenState extends State<RegisterScreen>
       
       print('📝 Données d\'inscription préparées: ${registrationData.toJson()}');
 
-      setState(() => _currentStep = 'Appel du service d\'inscription');
-      print('�� Appel du service d\'inscription...');
+      
+      print('🚀 Appel du service d\'inscription...');
       try {
-        final user = await authService.register(registrationData);
-        print('✅ Inscription réussie: ${user.prenom}');
-        print('🔍 Type utilisateur: ${user.typeUtilisateur.value}');
-        print('🔍 Route de redirection: ${_getRouteForUserType(user.typeUtilisateur)}');
-         
-        if (mounted) {
-          setState(() => _currentStep = 'Inscription réussie - Redirection');
-          
-          // Afficher un message de succès
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Bienvenue ${user.prenom} !'),
-              backgroundColor: AppConstants.successColor,
-              duration: const Duration(seconds: 2),
-            ),
-          );
+        // Utiliser l'AuthProvider au lieu du service direct
+        final success = await context.read<AuthProvider>().register(
+          prenom: _prenomController.text.trim(),
+          pseudo: _pseudoController.text.trim(), // Passer le pseudo saisi
+          pin: _pinController.text.trim(),
+          numTel: _phoneController.text.trim().isEmpty ? '' : _phoneController.text.trim(),
+          userType: _selectedUserType.value,
+          langue: _selectedLanguage,
+          region: _selectedRegion,
+        );
+        
+        if (success) {
+          // Récupérer l'utilisateur depuis l'AuthProvider
+          final user = context.read<AuthProvider>().currentUser;
+          if (user != null) {
+            print('✅ Inscription réussie: ${user.prenom}');
+            print('🔍 Type utilisateur: ${user.typeUtilisateur.value}');
+            print('🔍 Route de redirection: ${_getRouteForUserType(user.typeUtilisateur)}');
+             
+            if (mounted) {
+              // Afficher un message de succès
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Bienvenue ${user.prenom} !'),
+                  backgroundColor: AppConstants.successColor,
+                  duration: const Duration(seconds: 2),
+                ),
+              );
 
-          print('🔄 Redirection vers l\'écran approprié...');
-          // Attendre un peu pour que le SnackBar soit visible
-          await Future.delayed(const Duration(seconds: 2));
-          
-          // Rediriger vers l'écran approprié
-          _redirectToUserScreen(user.typeUtilisateur);
+              print('🔄 Redirection vers l\'écran approprié...');
+              // Attendre un peu pour que le SnackBar soit visible
+              await Future.delayed(const Duration(seconds: 2));
+              
+              // Rediriger vers l'écran approprié
+              _redirectToUserScreen(user.typeUtilisateur);
+            }
+          } else {
+            throw Exception('Utilisateur non récupéré après inscription');
+          }
+        } else {
+          throw Exception('Échec de l\'inscription');
         }
       } catch (e) {
-        print('❌ Erreur lors de l\'inscription dans AuthService: $e');
+        print('❌ Erreur lors de l\'inscription via AuthProvider: $e');
         throw Exception('Erreur lors de l\'inscription: $e');
       }
       
@@ -1073,7 +1350,7 @@ class _RegisterScreenState extends State<RegisterScreen>
         setState(() {
           _errorMessage = e.toString().replaceFirst('Exception: ', '');
           _isLoading = false;
-          _currentStep = 'Erreur: ${_errorMessage}';
+
         });
 
         HapticFeedback.mediumImpact();
@@ -1092,9 +1369,7 @@ class _RegisterScreenState extends State<RegisterScreen>
       if (mounted) {
         setState(() {
           _isLoading = false;
-          if (_errorMessage == null) {
-            _currentStep = 'Terminé';
-          }
+
         });
       }
     }
@@ -1103,24 +1378,29 @@ class _RegisterScreenState extends State<RegisterScreen>
   /// Redirige vers l'écran approprié selon le type d'utilisateur
   void _redirectToUserScreen(UserType userType) {
     print('🔄 Redirection pour type: ${userType.value}');
-    switch (userType) {
-      case UserType.victime:
-        print('🎯 Redirection vers: ${AppConstants.routeVictimHome}');
-        context.pushReplacement(AppConstants.routeVictimHome);
-        break;
-      case UserType.aidant:
-        print('🎯 Redirection vers: ${AppConstants.routeHelperHome}');
-        context.pushReplacement(AppConstants.routeHelperHome);
-        break;
-      case UserType.ong:
-        print('🎯 Redirection vers: ${AppConstants.routeONGHome}');
-        context.pushReplacement(AppConstants.routeONGHome);
-        break;
-      case UserType.admin:
-        print('🎯 Redirection vers: ${AppConstants.routeAdminHome}');
-        context.pushReplacement(AppConstants.routeAdminHome);
-        break;
-    }
+    // Attendre un peu pour que l'état d'authentification soit mis à jour
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) {
+        switch (userType) {
+          case UserType.victime:
+            print('🎯 Redirection vers: ${AppConstants.routeVictimHome}');
+            context.go(AppConstants.routeVictimHome);
+            break;
+          case UserType.aidant:
+            print('🎯 Redirection vers: ${AppConstants.routeHelperHome}');
+            context.go(AppConstants.routeHelperHome);
+            break;
+          case UserType.ong:
+            print('🎯 Redirection vers: ${AppConstants.routeONGHome}');
+            context.go(AppConstants.routeONGHome);
+            break;
+          case UserType.admin:
+            print('🎯 Redirection vers: ${AppConstants.routeAdminHome}');
+            context.go(AppConstants.routeAdminHome);
+            break;
+        }
+      }
+    });
   }
 
   /// Obtient la route pour un type d'utilisateur (pour debug)
@@ -1200,3 +1480,4 @@ class _RegisterScreenState extends State<RegisterScreen>
     );
   }
 }
+

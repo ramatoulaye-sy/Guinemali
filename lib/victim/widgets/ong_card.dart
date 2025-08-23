@@ -25,7 +25,7 @@ class ONGCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
         boxShadow: [
           BoxShadow(
-            color: AppConstants.primaryColor.withOpacity(0.1),
+            color: AppConstants.primaryColor.withValues(alpha: 0.1),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -95,7 +95,7 @@ class ONGCard extends StatelessWidget {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: AppConstants.successColor.withOpacity(0.1),
+                          color: AppConstants.successColor.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Text(

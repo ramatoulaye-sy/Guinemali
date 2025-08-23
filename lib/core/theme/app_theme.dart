@@ -1,8 +1,25 @@
 import 'package:flutter/material.dart';
-import 'app_constants.dart';
+import '../constants/app_constants.dart';
 
 /// Thèmes de l'application
 class AppTheme {
+  // Couleurs principales
+  static const Color primaryColor = AppConstants.primaryColor;
+  static const Color secondaryColor = AppConstants.secondaryColor;
+  static const Color accentColor = AppConstants.accentColor;
+  static const Color backgroundColor = AppConstants.backgroundColor;
+  static const Color whiteColor = AppConstants.whiteColor;
+  static const Color blackColor = AppConstants.blackColor;
+  static const Color errorColor = AppConstants.errorColor;
+  static const Color warningColor = AppConstants.warningColor;
+  static const Color successColor = AppConstants.successColor;
+  static const Color infoColor = AppConstants.infoColor;
+  static const Color emergencyColor = AppConstants.alertActiveColor;
+  static const Color surfaceColor = AppConstants.backgroundColor;
+  static const Color textPrimaryColor = AppConstants.blackColor;
+  static const Color textSecondaryColor = AppConstants.blackColor;
+  static const Color borderColor = AppConstants.primaryColor;
+
   /// Dégradé de fond par défaut
   static const LinearGradient backgroundGradient = LinearGradient(
     begin: Alignment.topCenter,

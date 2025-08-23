@@ -1,7 +1,11 @@
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/foundation.dart';
 import '../constants/app_constants.dart';
 import 'supabase_service.dart';
 import 'auth_service.dart';
+import 'geolocation_service.dart';
+import 'storage_service.dart';
+import 'dart:async';
 
 /// Service de gestion des contacts d'urgence (appels et SMS)
 class EmergencyContactService {
@@ -13,6 +17,137 @@ class EmergencyContactService {
   final SupabaseService _supabase = SupabaseService.instance;
   List<Map<String, dynamic>> _callQueue = [];
   int _currentIndex = 0;
+
+  // Etat observables pour l'UI
+  final ValueNotifier<bool> isRunning = ValueNotifier(false);
+  final ValueNotifier<int> current = ValueNotifier(0);
+  final ValueNotifier<int> total = ValueNotifier(0);
+  final ValueNotifier<String> statusText = ValueNotifier('');
+
+  // Paramètre: envoi automatique des SMS de secours
+  final ValueNotifier<bool> autoSmsEnabled = ValueNotifier(true);
+
+  Future<void> loadSettings() async {
+    final saved = StorageService.instance.getBool('emergency_auto_sms', defaultValue: true);
+    autoSmsEnabled.value = saved;
+  }
+
+  Future<void> setAutoSmsEnabled(bool enabled) async {
+    autoSmsEnabled.value = enabled;
+    await StorageService.instance.saveBool('emergency_auto_sms', enabled);
+  }
+
+  /// Lance une cascade d'appels (jusqu'à 3) avec SMS de secours et pauses.
+  /// - callWindow: durée d'attente entre lancement d'appel et envoi du SMS.
+  /// - waitBetween: pause entre deux contacts.
+  Future<void> callAllContactsWithFallback({
+    Duration callWindow = const Duration(seconds: 25),
+    Duration waitBetween = const Duration(seconds: 5),
+    String? customMessage,
+  }) async {
+    try {
+      await loadSettings();
+      _callQueue = await getEmergencyContacts();
+      _currentIndex = 0;
+
+      if (_callQueue.isEmpty) {
+        // Fallback: numéro d'urgence officiel configuré, sinon 117
+        final configured = StorageService.instance.getString('official_emergency_number');
+        final fallback = (configured != null && configured.trim().isNotEmpty) ? configured.trim() : '117';
+        final uri = Uri.parse('tel:$fallback');
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+          if (AppConstants.enableLogging) {
+            print('📞 Appel d\'urgence vers $fallback');
+          }
+        }
+        return;
+      }
+
+      // Init état UI
+      isRunning.value = true;
+      total.value = _callQueue.length.clamp(0, AppConstants.maxEmergencyContacts);
+      current.value = 0;
+      statusText.value = 'Préparation…';
+
+      // Préparer un message SMS (inclure localisation si possible)
+      String template = customMessage ??
+          (StorageService.instance.getString('emergency_message_template') ??
+              'Alerte SOS – j\'ai besoin d\'aide.\nMa position: {lat},{lon}\n{link}');
+      String message = template;
+      try {
+        final pos = await GeolocationService.instance.getLastKnownPosition() 
+                  ?? await GeolocationService.instance.getCurrentPosition();
+        final lat = pos.latitude.toStringAsFixed(6);
+        final lon = pos.longitude.toStringAsFixed(6);
+        final mapsUrl = 'https://maps.google.com/?q=$lat,$lon';
+        message = template
+          .replaceAll('{lat}', lat)
+          .replaceAll('{lon}', lon)
+          .replaceAll('{link}', mapsUrl);
+      } catch (_) {
+        // pas de localisation, garder message simple
+      }
+
+      while (_currentIndex < _callQueue.length && _currentIndex < AppConstants.maxEmergencyContacts) {
+        final contact = _callQueue[_currentIndex];
+        final phone = (contact['numero_telephone'] ?? contact['phone_number'] ?? '').toString();
+        if (phone.isEmpty) {
+          _currentIndex++;
+          continue;
+        }
+
+        // 1) Lancer l'appel
+        current.value = _currentIndex + 1;
+        statusText.value = 'Appel ${current.value}/${total.value}';
+        final callUri = Uri.parse('tel:$phone');
+        if (await canLaunchUrl(callUri)) {
+          await launchUrl(callUri, mode: LaunchMode.externalApplication);
+          if (AppConstants.enableLogging) {
+            print('📞 Appel lancé vers $phone');
+          }
+        }
+
+        // 2) Attendre la fenêtre d\'appel
+        await Future.delayed(callWindow);
+
+        // 3) Envoyer un SMS de secours (si activé)
+        if (autoSmsEnabled.value) {
+          statusText.value = 'Préparation SMS ${current.value}/${total.value}…';
+          // Note: les plateformes restreignent l'envoi totalement silencieux.
+          // On tente d'abord le composeur SMS prérempli. Si non dispo, fallback vers schéma "smsto:".
+          final body = Uri.encodeComponent(message);
+          final smsUri = Uri.parse('sms:$phone?body=$body');
+          final smsToUri = Uri.parse('smsto:$phone?body=$body');
+          if (await canLaunchUrl(smsUri)) {
+            await launchUrl(smsUri, mode: LaunchMode.externalApplication);
+            if (AppConstants.enableLogging) {
+              print('✉️ SMS de secours préparé pour $phone');
+            }
+          } else if (await canLaunchUrl(smsToUri)) {
+            await launchUrl(smsToUri, mode: LaunchMode.externalApplication);
+          }
+        }
+
+        // 4) Pause entre contacts
+        await Future.delayed(waitBetween);
+
+        _currentIndex++;
+      }
+
+      if (AppConstants.enableLogging) {
+        print('✅ Séquence d\'appels d\'urgence terminée');
+      }
+      statusText.value = 'Terminé';
+    } catch (e) {
+      if (AppConstants.enableLogging) {
+        print('❌ Erreur séquence d\'appels (cascade): $e');
+      }
+    }
+    finally {
+      isRunning.value = false;
+    }
+  }
 
   /// Récupère les contacts d'urgence (max 3) classés par priorité
   Future<List<Map<String, dynamic>>> getEmergencyContacts() async {

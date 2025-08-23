@@ -165,7 +165,7 @@ class RefreshableWidget extends StatelessWidget {
   final String? errorMessage;
   final VoidCallback? onRetry;
 
-  RefreshableWidget({
+  const RefreshableWidget({
     super.key,
     required this.child,
     required this.onRefresh,

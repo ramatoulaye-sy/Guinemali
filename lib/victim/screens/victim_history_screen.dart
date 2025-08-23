@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:guinemali/core/services/supabase_service.dart';
-import 'package:guinemali/core/providers/auth_provider.dart';
-import 'package:guinemali/core/constants/app_constants.dart';
-import 'package:guinemali/victim/widgets/alert_history_list.dart';
+import '../../core/providers/auth_provider.dart';
+import '../../core/services/supabase_service.dart';
+import '../widgets/alert_history_list.dart';
+import 'victim_active_alert_screen.dart';
 
 class VictimHistoryScreen extends StatefulWidget {
   const VictimHistoryScreen({super.key});
@@ -90,9 +90,11 @@ class _VictimHistoryScreenState extends State<VictimHistoryScreen> {
                 filter: _selectedFilter,
                 onFilterChanged: (f) => setState(() => _selectedFilter = f),
                 onTapItem: (item) {
-                  // TODO: ouvrir le détail de l'alerte
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Alerte ${item.id}')), 
+                  // Ouvrir l'écran d'alerte active
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const VictimActiveAlertScreen(),
+                    ),
                   );
                 },
               ),

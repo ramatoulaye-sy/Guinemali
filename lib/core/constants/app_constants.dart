@@ -19,6 +19,7 @@ class AppConstants {
   static const String routeLogin = '/login';
   static const String routeRegister = '/register';
   static const String routeVictimHome = '/victim/home';
+  static const String routeVictimDashboard = '/victim/dashboard'; // Nouvelle route dashboard
   static const String routeVictimActiveAlert = '/victim/active-alert';
   static const String routeVictimContacts = '/victim/contacts';
   static const String routeHelperHome = '/helper/home';

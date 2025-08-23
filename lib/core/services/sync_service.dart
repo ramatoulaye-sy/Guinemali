@@ -1,10 +1,8 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:guinemali/core/services/storage_service.dart';
 import 'package:guinemali/core/services/supabase_service.dart';
-import 'package:guinemali/core/constants/app_constants.dart';
 
 /// Service de synchronisation robuste pour la gestion hors-ligne → en ligne
 class SyncService {
@@ -19,7 +17,7 @@ class SyncService {
   bool _isOnline = true;
   bool _isSyncing = false;
   int _retryCount = 0;
-  int _maxRetries = 5;
+  final int _maxRetries = 5;
   
   // File d'attente des données à synchroniser
   final List<Map<String, dynamic>> _syncQueue = [];
@@ -71,10 +69,10 @@ class SyncService {
   Future<void> _checkConnectivity() async {
     try {
       // Test simple de connectivité en tentant une requête vers Supabase
-      final connectivityResult = await Connectivity().checkConnectivity();
+      final connectivityResults = await Connectivity().checkConnectivity();
       final wasOnline = _isOnline;
       
-      _isOnline = connectivityResult != ConnectivityResult.none;
+      _isOnline = connectivityResults.isNotEmpty && connectivityResults.any((result) => result != ConnectivityResult.none);
       
       // Si on repasse en ligne, tenter une synchronisation
       if (!wasOnline && _isOnline) {

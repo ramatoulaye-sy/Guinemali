@@ -59,10 +59,10 @@ class AuthService {
   /// Charge l'utilisateur depuis le stockage local
   Future<void> _loadUserFromLocalStorage() async {
     try {
-      final userId = await _storage.getString(AppConstants.keyUserId);
-      final userPrenom = await _storage.getString(AppConstants.keyUserPrenom);
-      final userType = await _storage.getString(AppConstants.keyUserType);
-      final isLoggedIn = await _storage.getBool(AppConstants.keyIsLoggedIn) ?? false;
+      final userId = _storage.getString(AppConstants.keyUserId);
+      final userPrenom = _storage.getString(AppConstants.keyUserPrenom);
+      final userType = _storage.getString(AppConstants.keyUserType);
+      final isLoggedIn = _storage.getBool(AppConstants.keyIsLoggedIn, defaultValue: false);
 
       if (isLoggedIn && userId != null && userPrenom != null && userType != null) {
         // Récupérer les données complètes depuis la base de données
@@ -86,7 +86,7 @@ class AuthService {
     }
   }
 
-  // Générer un email temporaire unique
+  // Générer un email temporaire unique unique
   String _generateTempEmail(String prenom) {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final sanitizedPrenom = prenom.toLowerCase()
@@ -94,73 +94,90 @@ class AuthService {
     return '${sanitizedPrenom}_$timestamp@gmail.com';
   }
 
+  // Générer un pseudo unique basé sur le prénom
+  String _generateUniquePseudo(String prenom) {
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final sanitizedPrenom = prenom.toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]'), '');
+    return '${sanitizedPrenom}_$timestamp';
+  }
+
   /// Inscription d'un nouvel utilisateur
   Future<UserModel> register(RegistrationData registrationData) async {
     try {
-      // Créer un email temporaire unique valide basé sur le prénom
-      final tempEmail = _generateTempEmail(registrationData.prenom);
+      print(' === DÉBUT DE L\'INSCRIPTION ===');
+      print(' Données reçues: ${registrationData.toJson()}');
       
-      // Chiffrer le PIN
-      final hashedPin = _hashPin(registrationData.pin);
-
-      // Créer le compte d'authentification
+      // Test de connexion Supabase
+      print('🔌 Test de connexion Supabase...');
+      try {
+        final testResponse = await _supabase.select(
+          'utilisateurs',
+          limit: 1,
+        );
+        print('✅ Connexion Supabase OK: $testResponse');
+      } catch (e) {
+        print('❌ Erreur connexion Supabase: $e');
+        throw Exception('Impossible de se connecter à Supabase: $e');
+      }
+      
+      // Créer l'utilisateur dans Supabase Auth
+      print('🚀 Création utilisateur Supabase Auth...');
       final authResponse = await _supabase.signUpWithEmail(
-        email: tempEmail,
-        password: registrationData.pin, // Utiliser le PIN comme mot de passe
-        data: {
-          'prenom': registrationData.prenom,
-          'type_utilisateur': registrationData.typeUtilisateur.value,
-        },
+        email: '${registrationData.pseudo}@temp.guinemali.local',
+        password: registrationData.pin,
       );
-
+      
       if (authResponse.user == null) {
-        throw Exception('Erreur lors de la création du compte');
+        throw Exception('Échec de la création de l\'utilisateur');
       }
-
-      // Créer le profil utilisateur dans la table publique
-      final userData = registrationData.toJson();
-      // Aligner avec le schéma: inclure explicitement `prenom` en base
-      userData['prenom'] = registrationData.prenom;
-      userData['id'] = authResponse.user!.id;
-      userData['pin_chiffre'] = hashedPin;
-      // S'assurer que pseudo a une valeur (utiliser le prénom par défaut)
-      if (userData['pseudo'] == null || userData['pseudo'] == '') {
-        userData['pseudo'] = registrationData.prenom;
-      }
-
-      final userResponse = await _supabase.insert(
+      
+      print('✅ Utilisateur créé dans Supabase Auth: ${authResponse.user!.id}');
+      
+      // Insérer dans la table utilisateurs
+      print('📝 Insertion dans la table utilisateurs...');
+      final userData = {
+        'id': authResponse.user!.id,
+        'pseudo': registrationData.pseudo,
+        'prenom': registrationData.prenom,
+        'pin_chiffre': registrationData.pin,
+        'num_tel': registrationData.numTel,
+        'type_utilisateur': registrationData.typeUtilisateur == UserType.victime ? 'victime' : 'aidant',
+        'langue': registrationData.langue,
+        'region': registrationData.region,
+        'actif': true,
+        'date_creation': DateTime.now().toIso8601String(),
+      };
+      
+      print(' Données à insérer: $userData');
+      
+      final result = await _supabase.insert(
         'utilisateurs',
         userData,
       );
-
-      // userResponse est maintenant directement une List
-      if (userResponse == null || userResponse.isEmpty) {
-        throw Exception('Erreur lors de la création du profil utilisateur');
+      
+      if (result == null || result.isEmpty) {
+        throw Exception('Échec de l\'insertion dans la table utilisateurs');
       }
-
-      // Créer l'objet UserModel
-      final userModel = UserModel.fromJson(userResponse.first);
-      _currentUser = userModel;
-
-      // Sauvegarder localement
-      await _saveUserDataLocally(userModel);
-
-      // Journaliser l'inscription
-      await _logAction('inscription', {
-        'prenom': registrationData.prenom,
-        'type_utilisateur': registrationData.typeUtilisateur.value,
-      });
-
-      if (AppConstants.enableLogging) {
-        print('✅ Utilisateur inscrit: ${userModel.prenom}');
-      }
-
-      return userModel;
+      
+      print('✅ Utilisateur inséré dans la table: ${result.first['id']}');
+      
+      // Créer et retourner le UserModel
+      final user = UserModel(
+        id: result.first['id'],
+        prenom: result.first['prenom'],
+        pseudo: result.first['pseudo'],
+        typeUtilisateur: result.first['type_utilisateur'] == 'victime' ? UserType.victime : UserType.aidant,
+        dateCreation: DateTime.now(),
+      );
+      
+      print('✅ Inscription réussie pour: ${user.prenom}');
+      return user;
+      
     } catch (e) {
-      if (AppConstants.enableLogging) {
-        print('❌ Erreur inscription: $e');
-      }
-      throw _handleAuthError(e);
+      print('❌ Erreur détaillée lors de l\'inscription: $e');
+      print('📚 Stack trace: ${StackTrace.current}');
+      throw Exception('Échec de l\'inscription: $e');
     }
   }
 

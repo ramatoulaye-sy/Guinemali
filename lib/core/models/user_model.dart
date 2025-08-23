@@ -3,6 +3,7 @@
 class UserModel {
   final String id;
   final String prenom;
+  final String pseudo;
   final String? pinChiffre;
   final String? numTel;
   final String langue;
@@ -16,6 +17,7 @@ class UserModel {
   const UserModel({
     required this.id,
     required this.prenom,
+    required this.pseudo,
     this.pinChiffre,
     this.numTel,
     this.langue = 'fr',
@@ -31,8 +33,8 @@ class UserModel {
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
       id: json['id'] as String,
-      // Compat: la base a `pseudo` (unique). On l'utilise comme "prenom" affiché si `prenom` absent
-      prenom: (json['prenom'] ?? json['pseudo']) as String,
+      prenom: json['prenom'] as String,
+      pseudo: json['pseudo'] as String,
       pinChiffre: json['pin_chiffre'] as String?,
       numTel: json['num_tel'] as String?,
       langue: json['langue'] as String? ?? 'fr',
@@ -52,6 +54,7 @@ class UserModel {
     return {
       'id': id,
       'prenom': prenom,
+      'pseudo': pseudo,
       'pin_chiffre': pinChiffre,
       'num_tel': numTel,
       'langue': langue,
@@ -68,6 +71,7 @@ class UserModel {
   UserModel copyWith({
     String? id,
     String? prenom,
+    String? pseudo,
     String? pinChiffre,
     String? numTel,
     String? langue,
@@ -81,6 +85,7 @@ class UserModel {
     return UserModel(
       id: id ?? this.id,
       prenom: prenom ?? this.prenom,
+      pseudo: pseudo ?? this.pseudo,
       pinChiffre: pinChiffre ?? this.pinChiffre,
       numTel: numTel ?? this.numTel,
       langue: langue ?? this.langue,
@@ -95,7 +100,7 @@ class UserModel {
 
   @override
   String toString() {
-    return 'UserModel(id: $id, prenom: $prenom, type: ${typeUtilisateur.value})';
+    return 'UserModel(id: $id, prenom: $prenom, pseudo: $pseudo, type: ${typeUtilisateur.value})';
   }
 
   @override

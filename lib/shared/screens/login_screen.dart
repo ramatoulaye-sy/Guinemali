@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
-import 'package:guinemali/core/models/auth_models.dart';
-
-import '../../core/constants/app_constants.dart';
+import 'package:guinemali/core/constants/app_constants.dart';
+import '../../core/providers/auth_provider.dart';
 import '../../core/models/user_model.dart';
-import '../../core/services/auth_service.dart';
 
 /// Écran de connexion pour l'application Guinèmali
 /// Permet aux utilisateurs existants de se connecter avec prénom et PIN
@@ -50,14 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFFF8F9FA),
-              Color(0xFFE9ECEF),
-            ],
-          ),
+          color: Colors.white,
         ),
         child: SafeArea(
           child: SingleChildScrollView(
@@ -446,17 +438,21 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final authService = AuthService.instance;
-      final loginData = LoginData(
+      // Utiliser l'AuthProvider au lieu du service direct
+      final success = await context.read<AuthProvider>().login(
         prenom: _pseudoController.text.trim(),
         pin: _pinController.text.trim(),
       );
-
-      final user = await authService.login(loginData);
       
-      if (mounted) {
-        // Rediriger vers l'écran approprié selon le type d'utilisateur
-        _redirectToUserScreen(user.typeUtilisateur);
+      if (success) {
+        // Récupérer l'utilisateur depuis l'AuthProvider
+        final user = context.read<AuthProvider>().currentUser;
+        if (user != null && mounted) {
+          // Rediriger vers l'écran approprié selon le type d'utilisateur
+          _redirectToUserScreen(user.typeUtilisateur);
+        }
+      } else {
+        throw Exception('Échec de la connexion');
       }
     } catch (e) {
       if (mounted) {
@@ -473,20 +469,25 @@ class _LoginScreenState extends State<LoginScreen> {
 
   /// Redirige vers l'écran approprié selon le type d'utilisateur
   void _redirectToUserScreen(UserType userType) {
-    switch (userType) {
-      case UserType.victime:
-        context.pushReplacement(AppConstants.routeVictimHome);
-        break;
-      case UserType.aidant:
-        context.pushReplacement(AppConstants.routeHelperHome);
-        break;
-      case UserType.ong:
-        context.pushReplacement(AppConstants.routeONGHome);
-        break;
-      case UserType.admin:
-        context.pushReplacement(AppConstants.routeAdminHome);
-        break;
-    }
+    // Attendre un peu pour que l'état d'authentification soit mis à jour
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) {
+        switch (userType) {
+          case UserType.victime:
+            context.go(AppConstants.routeVictimHome);
+            break;
+          case UserType.aidant:
+            context.go(AppConstants.routeHelperHome);
+            break;
+          case UserType.ong:
+            context.go(AppConstants.routeONGHome);
+            break;
+          case UserType.admin:
+            context.go(AppConstants.routeAdminHome);
+            break;
+        }
+      }
+    });
   }
 
   /// Affiche la boîte de dialogue pour PIN oublié

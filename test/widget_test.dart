@@ -5,15 +5,14 @@
 // gestures. You can also use WidgetTester to find child widgets in the widget
 // tree, read text, and verify that the values of widget properties are correct.
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:guinemali/main.dart';
+import 'package:guinemali/core/app/app_builder.dart';
 
 void main() {
   testWidgets('Guinemali app smoke test', (WidgetTester tester) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const GuinemaliApp());
+    await tester.pumpWidget(AppBuilder.buildApp());
 
     // Verify that the welcome screen appears
     expect(find.text('Guinèmali'), findsOneWidget);

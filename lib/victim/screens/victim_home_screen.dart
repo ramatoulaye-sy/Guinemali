@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../l10n/app_localizations.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/theme/app_theme.dart';
 
 import '../../core/providers/auth_provider.dart';
 import '../../core/services/geolocation_service.dart';
@@ -22,6 +23,7 @@ import '../widgets/victim_status_card.dart';
 import '../widgets/emergency_plan_widget.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../core/services/storage_service.dart';
+import '../../core/widgets/gps_permission_widget.dart';
 
 /// Écran d'accueil principal pour les victimes
 /// Contient le bouton SOS animé et les actions rapides
@@ -39,6 +41,12 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
   bool _isEmergencyMode = false;
   bool _isLoading = false;
   bool _isRefreshing = false;
+
+  // Données du plan d'urgence à afficher sur l'accueil
+  String _emergencyInstructions = '';
+  String _safePlaces = '';
+  String _escapeRoutes = '';
+  String _medicalInfo = '';
 
   @override
   void initState() {
@@ -78,18 +86,35 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
     );
   }
 
+  /// Charge les données du plan d'urgence depuis le stockage local
+  Future<void> _loadEmergencyPlanSummary() async {
+    try {
+      final instructions = StorageService.instance.getString('emergency_instructions') ?? '';
+      final safePlaces = StorageService.instance.getString('safe_places') ?? '';
+      final escapeRoutes = StorageService.instance.getString('escape_routes') ?? '';
+      final medicalInfo = StorageService.instance.getString('medical_info') ?? '';
+
+      if (mounted) {
+        setState(() {
+          _emergencyInstructions = instructions;
+          _safePlaces = safePlaces;
+          _escapeRoutes = escapeRoutes;
+          _medicalInfo = medicalInfo;
+        });
+      }
+    } catch (_) {
+      // Ne rien faire: l'accueil reste avec "Non défini" si aucune donnée
+    }
+  }
+
   Future<void> _checkLocationPermission() async {
     // Vérifier les permissions de géolocalisation au démarrage
     try {
       await GeolocationService.instance.checkPermissions();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Permissions de localisation requises: $e'),
-            backgroundColor: AppConstants.warningColor,
-          ),
-        );
+      // Ne pas afficher de SnackBar ici car le widget GPS gère déjà l'affichage
+      if (AppConstants.enableLogging) {
+        print('⚠️ Permissions de localisation: $e');
       }
     }
   }
@@ -124,6 +149,9 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
 
       // Initialiser les services
       await _initializeEvidenceService();
+
+      // Recharger le plan d'urgence
+      await _loadEmergencyPlanSummary();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -279,17 +307,7 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
     }
   }
 
-  /// Méthode de test pour vérifier que les boutons fonctionnent
-  void _testButtonFunctionality() {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ Test: Bouton fonctionne correctement'),
-          backgroundColor: AppConstants.successColor,
-        ),
-      );
-    }
-  }
+
 
   @override
   void dispose() {
@@ -305,7 +323,7 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
     final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: AppTheme.backgroundColor,
       body: AnimatedBuilder(
         animation: _backgroundController,
         builder: (context, child) {
@@ -314,12 +332,12 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
               gradient: LinearGradient(
                 colors: _isEmergencyMode
                     ? [
-                        const Color(0xFFFF0000).withValues(alpha: 0.1),
-                        const Color(0xFFFF0000).withValues(alpha: 0.05),
+                        AppTheme.emergencyColor.withValues(alpha: 0.05),
+                        AppTheme.emergencyColor.withValues(alpha: 0.02),
                       ]
                     : [
-                        const Color(0xFFF8F9FA),
-                        const Color(0xFFF0F0F0),
+                        AppTheme.backgroundColor,
+                        AppTheme.surfaceColor,
                       ],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
@@ -361,23 +379,38 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
       mainAxisSize: MainAxisSize.min,
       children: [
         // En-tête avec image de fond
-        _buildHeader(l10n.helloUser(user?.prenom ?? '')),
+        _buildHeader(user?.prenom ?? ''),
         
         const SizedBox(height: AppConstants.spacingLarge),
         
-        // Carte de statut de sécurité
-        Consumer2<AudioRecordingService, SyncService>(
-          builder: (context, audio, sync, _) {
-            final gpsActive = false; // TODO: Implémenter isTracking dans GeolocationService
-            return VictimStatusCard(
-              gpsActive: gpsActive,
-              audioActive: audio.isRecording,
-              online: sync.isOnline,
-              syncing: sync.isSyncing,
-              pendingItems: sync.pendingItemsCount,
-              failedItems: sync.failedItemsCount,
+        // Carte de statut de sécurité (écoute live du GPS)
+        ValueListenableBuilder<bool>(
+          valueListenable: GeolocationService.instance.isTracking,
+          builder: (_, tracking, __) {
+            return Consumer2<AudioRecordingService, SyncService>(
+              builder: (context, audio, sync, _) {
+                return VictimStatusCard(
+                  gpsActive: tracking,
+                  audioActive: audio.isRecording,
+                  online: sync.isOnline,
+                  syncing: sync.isSyncing,
+                  pendingItems: sync.pendingItemsCount,
+                  failedItems: sync.failedItemsCount,
+                );
+              },
             );
           },
+        ),
+        
+        const SizedBox(height: AppConstants.spacingMedium),
+        
+        // Widget de gestion des permissions GPS
+        GpsPermissionWidget(
+          onPermissionGranted: () {
+            // Recharger les données après obtention des permissions
+            _refreshData();
+          },
+          customMessage: 'La localisation est essentielle pour votre sécurité. Activez-la pour bénéficier de toutes les fonctionnalités de protection.',
         ),
         
         const SizedBox(height: AppConstants.spacingLarge),
@@ -398,13 +431,17 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
         
         const SizedBox(height: AppConstants.spacingLarge),
 
-        // Résumé du plan d'urgence
+        // Résumé du plan d'urgence (chargé depuis le stockage)
         EmergencyPlanWidget(
-          instructions: '',
-          safePlaces: '',
-          escapeRoutes: '',
-          medicalInfo: '',
-          onOpenPlan: () => context.push('/victim/emergency-plan'),
+          instructions: _emergencyInstructions,
+          safePlaces: _safePlaces,
+          escapeRoutes: _escapeRoutes,
+          medicalInfo: _medicalInfo,
+          onOpenPlan: () async {
+            await context.push('/victim/emergency-plan');
+            // Recharger après retour de l'écran d'édition
+            await _loadEmergencyPlanSummary();
+          },
         ),
         
         const SizedBox(height: AppConstants.spacingMedium),
@@ -422,7 +459,7 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
           flex: 2,
           child: Column(
             children: [
-              _buildHeader(l10n.helloUser(user?.prenom ?? '')),
+              _buildHeader(user?.prenom ?? ''),
               const SizedBox(height: AppConstants.spacingLarge),
               Center(
                 child: SizedBox(
@@ -446,7 +483,7 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
             children: [
               Consumer2<AudioRecordingService, SyncService>(
                 builder: (context, audio, sync, _) {
-                  final gpsActive = false; // TODO: Implémenter isTracking dans GeolocationService
+                  final gpsActive = GeolocationService.instance.isTracking.value;
                   return VictimStatusCard(
                     gpsActive: gpsActive,
                     audioActive: audio.isRecording,
@@ -457,15 +494,25 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
                   );
                 },
               ),
+              const SizedBox(height: AppConstants.spacingMedium),
+              
+              // Widget de gestion des permissions GPS
+              GpsPermissionWidget(
+                onPermissionGranted: () => _refreshData(),
+                customMessage: 'La localisation est essentielle pour votre sécurité. Activez-la pour bénéficier de toutes les fonctionnalités de protection.',
+              ),
               const SizedBox(height: AppConstants.spacingLarge),
               const QuickActionsPanel(),
               const SizedBox(height: AppConstants.spacingLarge),
               EmergencyPlanWidget(
-                instructions: '',
-                safePlaces: '',
-                escapeRoutes: '',
-                medicalInfo: '',
-                onOpenPlan: () => context.push('/victim/emergency-plan'),
+                instructions: _emergencyInstructions,
+                safePlaces: _safePlaces,
+                escapeRoutes: _escapeRoutes,
+                medicalInfo: _medicalInfo,
+                onOpenPlan: () async {
+                  await context.push('/victim/emergency-plan');
+                  await _loadEmergencyPlanSummary();
+                },
               ),
             ],
           ),
@@ -484,11 +531,11 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
           flex: 1,
           child: Column(
             children: [
-              _buildHeader(l10n.helloUser(user?.prenom ?? '')),
+              _buildHeader(user?.prenom ?? ''),
               const SizedBox(height: AppConstants.spacingLarge),
               Consumer2<AudioRecordingService, SyncService>(
                 builder: (context, audio, sync, _) {
-                  final gpsActive = false; // TODO: Implémenter isTracking dans GeolocationService
+                  final gpsActive = GeolocationService.instance.isTracking.value;
                   return VictimStatusCard(
                     gpsActive: gpsActive,
                     audioActive: audio.isRecording,
@@ -498,6 +545,13 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
                     failedItems: sync.failedItemsCount,
                   );
                 },
+              ),
+              const SizedBox(height: AppConstants.spacingMedium),
+              
+              // Widget de gestion des permissions GPS
+              GpsPermissionWidget(
+                onPermissionGranted: () => _refreshData(),
+                customMessage: 'La localisation est essentielle pour votre sécurité. Activez-la pour bénéficier de toutes les fonctionnalités de protection.',
               ),
             ],
           ),
@@ -527,11 +581,14 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
               const QuickActionsPanel(),
               const SizedBox(height: AppConstants.spacingLarge),
               EmergencyPlanWidget(
-                instructions: '',
-                safePlaces: '',
-                escapeRoutes: '',
-                medicalInfo: '',
-                onOpenPlan: () => context.push('/victim/emergency-plan'),
+                instructions: _emergencyInstructions,
+                safePlaces: _safePlaces,
+                escapeRoutes: _escapeRoutes,
+                medicalInfo: _medicalInfo,
+                onOpenPlan: () async {
+                  await context.push('/victim/emergency-plan');
+                  await _loadEmergencyPlanSummary();
+                },
               ),
             ],
           ),
@@ -544,55 +601,61 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
     final l10n = AppLocalizations.of(context)!;
     final radius = BorderRadius.circular(AppConstants.borderRadiusLarge);
     
+    // Message d'accueil générique si pas d'utilisateur connecté
+    final displayText = helloText.isEmpty ? 'Bienvenue sur Guinemali' : helloText;
+    
     return GestureNavigation(
       onSwipeLeft: () => context.push('/victim/contacts'),
       onSwipeRight: () => context.push('/victim/evidence'),
       onDoubleTap: () => _refreshData(),
       child: ClipRRect(
         borderRadius: radius,
-        child: Stack(
-          children: [
-            // Image de fond optionnelle
-            Positioned.fill(
-              child: AccessibleImage(
-                imagePath: 'assets/images/home_hero.jpg',
-                altText: 'Image de fond de l\'écran d\'accueil',
-                fit: BoxFit.cover,
+        child: Container(
+          height: 200,
+          decoration: BoxDecoration(
+            // Fond blanc pour le container principal
+            color: Colors.white,
+            borderRadius: radius,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.grey.shade200,
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
-            ),
-            // Voile dégradé pour lisibilité du texte
-            Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      const Color(0xFF945acb).withValues(alpha: 0.85),
-                      const Color(0xFFee82ee).withValues(alpha: 0.65),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(AppConstants.paddingMedium),
+            child: Row(
+              children: [
+                AccessibleIcon(
+                  icon: Icons.person,
+                  label: 'Icône de profil utilisateur',
+                  size: 28,
+                  color: AppTheme.primaryColor, // Icône couleur primaire
                 ),
-              ),
-            ),
-            // Contenu
-            Padding(
-              padding: const EdgeInsets.all(AppConstants.paddingMedium),
-              child: Row(
-                children: [
-                  AccessibleIcon(
-                    icon: Icons.person,
-                    label: 'Icône de profil utilisateur',
-                    size: 28,
-                    color: Colors.white,
-                  ),
-                  const SizedBox(width: AppConstants.spacingMedium),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          helloText,
+                const SizedBox(width: AppConstants.spacingMedium),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Container avec background gradient adapté au texte
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [
+                              AppTheme.primaryColor,    // #945acb
+                              AppTheme.secondaryColor, // #ee82ee
+                            ],
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          displayText,
                           style: TextStyle(
                             fontSize: context.getResponsiveFontSize(
                               mobile: 20,
@@ -600,18 +663,26 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
                               desktop: 28,
                             ),
                             fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            shadows: const [
-                              Shadow(
-                                offset: Offset(0, 2),
-                                blurRadius: 4,
-                                color: Colors.black26,
-                              ),
-                            ],
+                            color: Colors.white, // Texte blanc sur fond gradient
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
+                      ),
+                      const SizedBox(height: 8),
+                      // Container avec background gradient pour le slogan
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [
+                              AppTheme.secondaryColor, // #ee82ee
+                              AppTheme.primaryColor,  // #945acb
+                            ],
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text(
                           l10n.securityPriority,
                           style: TextStyle(
                             fontSize: context.getResponsiveFontSize(
@@ -619,29 +690,29 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
                               tablet: 16,
                               desktop: 18,
                             ),
-                            color: Colors.white,
+                            color: Colors.white, // Texte blanc sur fond gradient
                             fontWeight: FontWeight.w500,
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                  AccessibleIcon(
-                    icon: Icons.shield_outlined,
-                    label: 'Icône de bouclier de sécurité',
-                    size: 22,
-                    color: Colors.white,
-                    onTap: () => _refreshData(),
-                  )
-                      .animate(onPlay: (controller) => controller.repeat())
-                      .shimmer(
-                        duration: const Duration(seconds: 3),
-                        color: Colors.white.withValues(alpha: 0.4),
                       ),
-                ],
-              ),
+                    ],
+                  ),
+                ),
+                AccessibleIcon(
+                  icon: Icons.shield_outlined,
+                  label: 'Icône de bouclier de sécurité',
+                  size: 22,
+                  color: AppTheme.primaryColor, // Icône couleur primaire
+                  onTap: () => _refreshData(),
+                )
+                    .animate(onPlay: (controller) => controller.repeat())
+                    .shimmer(
+                      duration: const Duration(seconds: 3),
+                      color: AppTheme.primaryColor.withValues(alpha: 0.7), // Shimmer couleur primaire
+                    ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

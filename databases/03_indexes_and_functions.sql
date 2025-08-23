@@ -217,6 +217,67 @@ CREATE OR REPLACE FUNCTION public.check_pseudo_available(
   );
 $$ LANGUAGE sql SECURITY DEFINER;
 
+-- Fonction pour vérifier si un pseudo existe et proposer des alternatives
+CREATE OR REPLACE FUNCTION public.check_pseudo_availability(
+    p_pseudo TEXT
+) RETURNS JSON AS $$
+DECLARE
+    pseudo_exists BOOLEAN;
+    suggestions TEXT[];
+    base_pseudo TEXT;
+    counter INTEGER;
+    suggestion TEXT;
+BEGIN
+    -- Vérifier si le pseudo existe
+    SELECT EXISTS(
+        SELECT 1 FROM public.utilisateurs 
+        WHERE pseudo = p_pseudo
+    ) INTO pseudo_exists;
+    
+    -- Si le pseudo n'existe pas, retourner succès
+    IF NOT pseudo_exists THEN
+        RETURN json_build_object(
+            'available', true,
+            'message', 'Pseudo disponible',
+            'suggestions', '[]'::json
+        );
+    END IF;
+    
+    -- Si le pseudo existe, générer des suggestions
+    base_pseudo := p_pseudo;
+    counter := 1;
+    suggestions := ARRAY[]::TEXT[];
+    
+    -- Générer jusqu'à 5 suggestions
+    WHILE array_length(suggestions, 1) < 5 AND counter <= 100 LOOP
+        suggestion := base_pseudo || '_' || counter::TEXT;
+        
+        -- Vérifier si la suggestion est disponible
+        IF NOT EXISTS(
+            SELECT 1 FROM public.utilisateurs 
+            WHERE pseudo = suggestion
+        ) THEN
+            suggestions := array_append(suggestions, suggestion);
+        END IF;
+        
+        counter := counter + 1;
+    END LOOP;
+    
+    -- Retourner le résultat avec les suggestions
+    RETURN json_build_object(
+        'available', false,
+        'message', 'Pseudo déjà utilisé',
+        'suggestions', to_json(suggestions)
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Donner les permissions d'exécution
+GRANT EXECUTE ON FUNCTION public.check_pseudo_availability(TEXT) TO anon, authenticated;
+
+-- Recharger le schéma
+SELECT pg_notify('pgrst', 'reload schema');
+
 -- Droits d'exécution pour les rôles clients
 REVOKE ALL ON FUNCTION public.login_by_pseudo_hash(TEXT, TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.create_user_profile(UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) FROM PUBLIC;

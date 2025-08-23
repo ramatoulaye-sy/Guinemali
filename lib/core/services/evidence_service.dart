@@ -306,9 +306,7 @@ class EvidenceService {
         final file = await _cameraController!.stopVideoRecording();
         _isRecordingVideo = false;
 
-        if (file != null) {
-          _currentVideoPath = file.path;
-        }
+        _currentVideoPath = file.path;
 
         if (AppConstants.enableLogging) {
           print('✅ Enregistrement vidéo arrêté: $_currentVideoPath');

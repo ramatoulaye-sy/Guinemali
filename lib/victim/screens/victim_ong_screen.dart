@@ -84,7 +84,7 @@ class _VictimOngScreenState extends State<VictimOngScreen> {
               borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Colors.black.withValues(alpha: 0.1),
                   blurRadius: 4,
                   offset: const Offset(0, 2),
                 ),
@@ -148,8 +148,8 @@ class _VictimOngScreenState extends State<VictimOngScreen> {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            AppConstants.primaryColor.withOpacity(0.1),
-            AppConstants.secondaryColor.withOpacity(0.1),
+            AppConstants.primaryColor.withValues(alpha: 0.1),
+            AppConstants.secondaryColor.withValues(alpha: 0.1),
           ],
         ),
         borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),

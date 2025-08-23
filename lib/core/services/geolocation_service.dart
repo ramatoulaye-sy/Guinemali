@@ -6,6 +6,7 @@ import 'sync_service.dart';
 import 'supabase_service.dart';
 import 'package:uuid/uuid.dart';
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 
 /// Service de géolocalisation pour obtenir la position de l'utilisateur
 class GeolocationService {
@@ -15,6 +16,8 @@ class GeolocationService {
   GeolocationService._();
   final _uuid = const Uuid();
   StreamSubscription<Position>? _trackingSubscription;
+  // Notifier: indique si un suivi (stream) est actif
+  final ValueNotifier<bool> isTracking = ValueNotifier(false);
 
   /// Vérifie et demande les permissions de localisation
   Future<bool> checkPermissions() async {
@@ -36,6 +39,9 @@ class GeolocationService {
       }
 
       if (permission == LocationPermission.deniedForever) {
+        // Guider l'utilisateur vers les réglages
+        await Geolocator.openAppSettings();
+        await Geolocator.openLocationSettings();
         throw Exception('Permission de localisation refusée définitivement');
       }
 
@@ -67,8 +73,10 @@ class GeolocationService {
       await checkPermissions();
 
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 10),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 10),
+        ),
       );
 
       if (AppConstants.enableLogging) {
@@ -167,6 +175,7 @@ class GeolocationService {
         }
       }
     });
+    isTracking.value = true;
     return stream;
   }
 
@@ -174,6 +183,7 @@ class GeolocationService {
   Future<void> stopBackgroundTracking() async {
     await _trackingSubscription?.cancel();
     _trackingSubscription = null;
+    isTracking.value = false;
     if (AppConstants.enableLogging) {
       print('🛑 Tracking GPS arrêté');
     }

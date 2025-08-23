@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:guinemali/core/constants/app_constants.dart';
+// removed unused import
+import 'package:url_launcher/url_launcher.dart';
 
 class VictimHelpScreen extends StatefulWidget {
   const VictimHelpScreen({super.key});
@@ -381,11 +382,13 @@ class _VictimHelpScreenState extends State<VictimHelpScreen> {
                     title: 'Email Support',
                     subtitle: 'Nous écrire',
                     color: Colors.blue,
-                    onTap: () {
-                      // TODO: Ouvrir l'email de support
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Ouverture de l\'email de support à implémenter')),
-                      );
+                    onTap: () async {
+                      final uri = Uri.parse('mailto:support@guinemali.org?subject=Support%20Guinemali');
+                      if (await canLaunchUrl(uri)) {
+                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Impossible d\'ouvrir l\'email')));
+                      }
                     },
                   ),
                 ),
@@ -396,11 +399,13 @@ class _VictimHelpScreenState extends State<VictimHelpScreen> {
                     title: 'Téléphone',
                     subtitle: 'Nous appeler',
                     color: Colors.green,
-                    onTap: () {
-                      // TODO: Appeler le support
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Appel du support à implémenter')),
-                      );
+                    onTap: () async {
+                      final uri = Uri.parse('tel:+224000000000');
+                      if (await canLaunchUrl(uri)) {
+                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Impossible d\'ouvrir l\'appel')));
+                      }
                     },
                   ),
                 ),
@@ -418,11 +423,11 @@ class _VictimHelpScreenState extends State<VictimHelpScreen> {
                     title: 'FAQ',
                     subtitle: 'Questions fréquentes',
                     color: Colors.orange,
-                    onTap: () {
-                      // TODO: Ouvrir la FAQ
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Ouverture de la FAQ à implémenter')),
-                      );
+                    onTap: () async {
+                      final uri = Uri.parse('https://guinemali.org/faq');
+                      if (await canLaunchUrl(uri)) {
+                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      }
                     },
                   ),
                 ),
@@ -433,11 +438,11 @@ class _VictimHelpScreenState extends State<VictimHelpScreen> {
                     title: 'Manuel Utilisateur',
                     subtitle: 'Guide complet',
                     color: Colors.purple,
-                    onTap: () {
-                      // TODO: Ouvrir le manuel
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Ouverture du manuel à implémenter')),
-                      );
+                    onTap: () async {
+                      final uri = Uri.parse('https://guinemali.org/manuel');
+                      if (await canLaunchUrl(uri)) {
+                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      }
                     },
                   ),
                 ),

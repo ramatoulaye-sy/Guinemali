@@ -178,6 +178,10 @@ class StorageService {
     return _prefs?.getBool(key) ?? defaultValue;
   }
 
+  // Alias conviviaux
+  Future<void> saveBool(String key, bool value) => setBool(key, value);
+  Future<void> saveStringCompat(String key, String value) => saveString(key, value);
+
   /// Sauvegarde un entier
   Future<void> setInt(String key, int value) async {
     await _prefs?.setInt(key, value);
@@ -443,7 +447,6 @@ class StorageService {
   Future<int> getDatabaseSize() async {
     if (_database == null) return 0;
 
-    final path = _database!.path;
     try {
       final file = await _database!.rawQuery('PRAGMA page_count');
       final pageSize = await _database!.rawQuery('PRAGMA page_size');

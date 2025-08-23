@@ -14,15 +14,15 @@ class SafetyStatusCard extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            AppConstants.successColor.withOpacity(0.1),
-            AppConstants.successColor.withOpacity(0.05),
+            AppConstants.successColor.withValues(alpha: 0.1),
+            AppConstants.successColor.withValues(alpha: 0.05),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
         border: Border.all(
-          color: AppConstants.successColor.withOpacity(0.3),
+          color: AppConstants.successColor.withValues(alpha: 0.3),
         ),
       ),
       child: Row(

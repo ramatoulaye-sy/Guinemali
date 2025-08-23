@@ -22,12 +22,12 @@ class ContactCard extends StatelessWidget {
         color: AppConstants.whiteColor,
         borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
         border: Border.all(
-          color: _getPriorityColor(contact.priorite).withOpacity(0.3),
+          color: _getPriorityColor(contact.priorite).withValues(alpha: 0.3),
           width: 2,
         ),
         boxShadow: [
           BoxShadow(
-            color: _getPriorityColor(contact.priorite).withOpacity(0.1),
+            color: _getPriorityColor(contact.priorite).withValues(alpha: 0.1),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),

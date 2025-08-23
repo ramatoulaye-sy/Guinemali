@@ -128,7 +128,7 @@ class VictimMenuScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
         boxShadow: [
           BoxShadow(
-            color: AppConstants.primaryColor.withOpacity(0.3),
+            color: AppConstants.primaryColor.withValues(alpha: 0.3),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -140,7 +140,7 @@ class VictimMenuScreen extends StatelessWidget {
             width: 60,
             height: 60,
             decoration: BoxDecoration(
-              color: AppConstants.whiteColor.withOpacity(0.2),
+              color: AppConstants.whiteColor.withValues(alpha: 0.2),
               shape: BoxShape.circle,
               border: Border.all(
                 color: AppConstants.whiteColor,
@@ -181,7 +181,7 @@ class VictimMenuScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppConstants.whiteColor.withOpacity(0.2),
+              color: AppConstants.whiteColor.withValues(alpha: 0.2),
               shape: BoxShape.circle,
             ),
             child: const Icon(
@@ -205,7 +205,7 @@ class VictimMenuScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -248,7 +248,7 @@ class VictimMenuScreen extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: AppConstants.primaryColor.withOpacity(0.1),
+                  color: AppConstants.primaryColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
                 ),
                 child: Icon(
@@ -302,7 +302,7 @@ class VictimMenuScreen extends StatelessWidget {
         color: AppConstants.whiteColor,
         borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
         border: Border.all(
-          color: AppConstants.errorColor.withOpacity(0.3),
+          color: AppConstants.errorColor.withValues(alpha: 0.3),
         ),
       ),
       child: Material(
@@ -318,7 +318,7 @@ class VictimMenuScreen extends StatelessWidget {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: AppConstants.errorColor.withOpacity(0.1),
+                    color: AppConstants.errorColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
                   ),
                   child: const Icon(
@@ -354,7 +354,7 @@ class VictimMenuScreen extends StatelessWidget {
                 Icon(
                   Icons.arrow_forward_ios,
                   size: 16,
-                  color: AppConstants.errorColor.withOpacity(0.7),
+                  color: AppConstants.errorColor.withValues(alpha: 0.7),
                 ),
               ],
             ),

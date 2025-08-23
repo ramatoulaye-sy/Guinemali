@@ -46,18 +46,47 @@ class EmergencyPlanWidget extends StatelessWidget {
 				child: Column(
 					crossAxisAlignment: CrossAxisAlignment.start,
 					children: [
+						// Header du plan d'urgence - disposition flexible pour éviter l'overflow
 						Row(
 							children: [
-								Icon(Icons.emergency, color: Colors.red.shade600),
+								Icon(Icons.emergency, color: Colors.red.shade600, size: 20),
 								const SizedBox(width: 8),
-								Text('Plan d\'Urgence', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-								const Spacer(),
-								TextButton.icon(
-									onPressed: onOpenPlan,
-									icon: const Icon(Icons.open_in_new),
-									label: const Text('Ouvrir'),
+								Expanded(
+									child: Text(
+										'Plan d\'Urgence', 
+										style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+										overflow: TextOverflow.ellipsis,
+									),
+								),
+								const SizedBox(width: 8),
+								// Badge de statut
+								Container(
+									padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+									decoration: BoxDecoration(
+										color: _isComplete() ? Colors.green : Colors.orange,
+										borderRadius: BorderRadius.circular(10),
+									),
+									child: Text(
+										_isComplete() ? 'Complet' : 'À compléter',
+										style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+									),
 								),
 							],
+						),
+						// Bouton Ouvrir sur une ligne séparée pour éviter l'overflow
+						Align(
+							alignment: Alignment.centerRight,
+							child: Padding(
+								padding: const EdgeInsets.only(top: 8),
+								child: TextButton.icon(
+									onPressed: onOpenPlan,
+									icon: const Icon(Icons.open_in_new, size: 18),
+									label: const Text('Ouvrir', style: TextStyle(fontSize: 14)),
+									style: TextButton.styleFrom(
+										padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+									),
+								),
+							),
 						),
 						const SizedBox(height: 12),
 						_divider(),
@@ -76,4 +105,10 @@ class EmergencyPlanWidget extends StatelessWidget {
 	}
 
 	Widget _divider() => Container(height: 1, width: double.infinity, color: Colors.grey.shade300);
+
+	bool _isComplete() {
+		final fields = [instructions, safePlaces, escapeRoutes, medicalInfo];
+		return fields.every((e) => e.trim().isNotEmpty);
+	}
 }
+

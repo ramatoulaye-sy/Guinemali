@@ -65,7 +65,7 @@ class _VictimMainScreenState extends State<VictimMainScreen> {
           color: AppConstants.whiteColor,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withValues(alpha: 0.1),
               blurRadius: 10,
               offset: const Offset(0, -2),
             ),
@@ -125,7 +125,7 @@ class _VictimMainScreenState extends State<VictimMainScreen> {
         ),
         decoration: BoxDecoration(
           color: isSelected 
-              ? AppConstants.primaryColor.withOpacity(0.1)
+              ? AppConstants.primaryColor.withValues(alpha: 0.1)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
         ),

@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:go_router/go_router.dart';
-import 'package:guinemali/core/services/supabase_service.dart';
-import 'package:guinemali/core/services/storage_service.dart';
-import 'package:guinemali/core/providers/auth_provider.dart';
-import 'package:guinemali/core/constants/app_constants.dart';
+import '../../core/providers/auth_provider.dart';
+import '../../core/services/supabase_service.dart';
+
 
 class VictimProfileScreen extends StatefulWidget {
   const VictimProfileScreen({super.key});
@@ -406,9 +404,9 @@ class _VictimProfileScreenState extends State<VictimProfileScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Column(
         children: [

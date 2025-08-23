@@ -146,10 +146,10 @@ class SOSButton extends StatelessWidget {
                             vertical: 8,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
+                            color: Colors.white.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
-                              color: Colors.white.withOpacity(0.4),
+                              color: Colors.white.withValues(alpha: 0.4),
                               width: 2,
                             ),
                           ),
@@ -173,7 +173,7 @@ class SOSButton extends StatelessWidget {
                             .animate(onPlay: (controller) => controller.repeat())
                             .shimmer(
                               duration: const Duration(seconds: 3),
-                              color: Colors.white.withOpacity(0.4),
+                              color: Colors.white.withValues(alpha: 0.4),
                             ),
                       ],
                     ),
@@ -190,7 +190,7 @@ class SOSButton extends StatelessWidget {
         .then()
         .shimmer(
           duration: const Duration(seconds: 3),
-          color: const Color(0xFFee82ee).withOpacity(0.2),
+          color: const Color(0xFFee82ee).withValues(alpha: 0.2),
         );
       },
     );
