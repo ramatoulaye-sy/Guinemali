@@ -40,14 +40,14 @@ class SupabaseService {
       }
       
       await Supabase.initialize(
-        url: SupabaseConfig.url,
+        url: SupabaseConfig.projectUrl,
         anonKey: SupabaseConfig.anonKey,
         debug: true, // Activer le debug pour le développement
       );
       _initialized = true;
       
       print('✅ Supabase initialisé avec succès');
-      print('🔗 URL: ${SupabaseConfig.url}');
+      print('🔗 URL: ${SupabaseConfig.projectUrl}');
     } catch (e) {
       print('❌ Erreur lors de l\'initialisation de Supabase: $e');
       rethrow;

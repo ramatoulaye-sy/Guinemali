@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:guinemali/victim/widgets/sos_button.dart';
+import 'package:guinemali/protected_person/widgets/sos_button.dart';
 
 void main() {
   group('SOS Button Simple Tests', () {

@@ -187,7 +187,27 @@ class AuthService {
       print('🔐 === DÉBUT DE LA CONNEXION ===');
       print('🔍 Tentative de connexion pour: ${loginData.prenom}');
       
-      // Utiliser une fonction RPC (SECURITY DEFINER) pour respecter RLS et vérifier le couple pseudo + PIN
+      // MODE DE TEST TEMPORAIRE - Contourner Supabase pour les tests
+      if (AppConstants.enableTestMode) {
+        print('🧪 MODE DE TEST ACTIVÉ - Connexion simulée');
+        
+        // Créer un utilisateur de test
+        final testUser = UserModel(
+          id: 'test_user_id_${DateTime.now().millisecondsSinceEpoch}',
+          prenom: loginData.prenom,
+          pseudo: loginData.prenom.toLowerCase(),
+          typeUtilisateur: UserType.victime,
+          dateCreation: DateTime.now(),
+        );
+        
+        _currentUser = testUser;
+        await _saveUserDataLocally(testUser);
+        
+        print('✅ Connexion de test réussie: ${testUser.prenom}');
+        return testUser;
+      }
+      
+      // MODE NORMAL - Utiliser Supabase
       final hashedPin = _hashPin(loginData.pin);
       final userResponse = await _supabase.rpc(
         'login_by_pseudo_hash',

@@ -395,6 +395,64 @@ class AlertService {
     }
   }
 
+  /// Annule une alerte d'urgence
+  Future<void> cancelEmergencyAlert(String alertId) async {
+    try {
+      if (AppConstants.enableLogging) {
+        print('🔄 Annulation de l\'alerte: $alertId');
+      }
+
+      // Marquer l'alerte comme annulée dans la base de données
+      try {
+        await SupabaseService.instance.update(
+          'alertes',
+          {'statut': 'annulee'},
+          idColumn: 'id',
+          idValue: alertId,
+        );
+      } catch (e) {
+        // Ajouter à la file de synchronisation si le réseau/Supabase échoue
+        if (AppConstants.enableLogging) {
+          print('⚠️ UPDATE Supabase échoué, ajout à la file de sync: $e');
+        }
+        await SyncService.instance.addToSyncQueue('alerte_annulation', {
+          'id': alertId,
+          'statut': 'annulee',
+          'timestamp_annulation': DateTime.now().toUtc().toIso8601String(),
+        });
+      }
+
+      // Arrêter le tracking GPS pour cette alerte
+      try {
+        GeolocationService.instance.stopBackgroundTracking();
+      } catch (_) {}
+
+      // Arrêter l'enregistrement audio pour cette alerte
+      try {
+        AudioRecordingService.instance.stopBackgroundRecording();
+      } catch (_) {}
+
+      // Supprimer l'ID d'alerte courant du stockage local
+      try {
+        await StorageService.instance.remove(AppConstants.keyCurrentAlertId);
+      } catch (_) {}
+
+      // Marquer l'alerte comme annulée localement
+      try {
+        await StorageService.instance.removeLocalAlert(alertId);
+      } catch (_) {}
+
+      if (AppConstants.enableLogging) {
+        print('✅ Alerte annulée: $alertId');
+      }
+    } catch (e) {
+      if (AppConstants.enableLogging) {
+        print('❌ Erreur lors de l\'annulation de l\'alerte: $e');
+      }
+      rethrow;
+    }
+  }
+
   /// Nettoie les ressources
   void dispose() {
     if (AppConstants.enableLogging) {

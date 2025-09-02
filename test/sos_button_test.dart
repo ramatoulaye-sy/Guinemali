@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:guinemali/core/providers/auth_provider.dart';
-import 'package:guinemali/victim/screens/victim_home_screen.dart';
+import 'package:guinemali/protected_person/screens/victim_home_screen.dart';
 
 void main() {
   group('SOS Button Tests', () {

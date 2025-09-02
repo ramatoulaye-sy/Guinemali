@@ -13,6 +13,7 @@ class AppConstants {
   // Mode debug et logging
   static const bool enableDebugMode = true;
   static const bool enableLogging = true;
+  static const bool enableTestMode = true; // MODE DE TEST TEMPORAIRE - Activer pour tester sans Supabase
   
   // Routes de navigation
   static const String routeWelcome = '/welcome';
@@ -22,6 +23,15 @@ class AppConstants {
   static const String routeVictimDashboard = '/victim/dashboard'; // Nouvelle route dashboard
   static const String routeVictimActiveAlert = '/victim/active-alert';
   static const String routeVictimContacts = '/victim/contacts';
+  static const String routeVictimQuickActions = '/victim/quick-actions';
+  static const String routeVictimEvidence = '/victim/evidence';
+  static const String routeVictimEmergencyPlan = '/victim/emergency-plan';
+  static const String routeVictimHistory = '/victim/history';
+  static const String routeVictimSettings = '/victim/settings';
+  static const String routeVictimHelp = '/victim/help';
+  static const String routeVictimProfile = '/victim/profile';
+  static const String routeVictimForum = '/victim/forum';
+  static const String routeVictimRecordEvidence = '/victim/record-evidence';
   static const String routeHelperHome = '/helper/home';
   static const String routeONGHome = '/ong/home';
   static const String routeAdminHome = '/admin/home';

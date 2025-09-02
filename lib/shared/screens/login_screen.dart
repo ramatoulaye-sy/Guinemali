@@ -474,7 +474,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         switch (userType) {
           case UserType.victime:
-            context.go(AppConstants.routeVictimHome);
+            context.go(AppConstants.routeVictimDashboard);
             break;
           case UserType.aidant:
             context.go(AppConstants.routeHelperHome);
