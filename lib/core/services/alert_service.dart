@@ -613,6 +613,90 @@ class AlertService {
     }
   }
 
+  /// Écoute les changements d'alertes en temps réel
+  Stream<Map<String, dynamic>> listenToAlerts() {
+    final userId = AuthService.instance.userId;
+    if (userId == null) {
+      throw Exception('Utilisateur non connecté');
+    }
+    
+    _realtimeService.listenToAlerts(userId);
+    return _realtimeService.alertStream;
+  }
+
+  /// Écoute les changements de positions en temps réel
+  Stream<Map<String, dynamic>> listenToPositions() {
+    final userId = AuthService.instance.userId;
+    if (userId == null) {
+      throw Exception('Utilisateur non connecté');
+    }
+    
+    _realtimeService.listenToPositions(userId);
+    return _realtimeService.positionStream;
+  }
+
+  /// Écoute les notifications en temps réel
+  Stream<Map<String, dynamic>> listenToNotifications() {
+    final userId = AuthService.instance.userId;
+    if (userId == null) {
+      throw Exception('Utilisateur non connecté');
+    }
+    
+    _realtimeService.listenToNotifications(userId);
+    return _realtimeService.notificationStream;
+  }
+
+  /// Envoie une notification temps réel
+  Future<void> sendRealtimeNotification({
+    required String title,
+    required String message,
+    String? type,
+    Map<String, dynamic>? data,
+  }) async {
+    final userId = AuthService.instance.userId;
+    if (userId == null) {
+      throw Exception('Utilisateur non connecté');
+    }
+
+    await _realtimeService.sendNotification(
+      userId: userId,
+      title: title,
+      message: message,
+      type: type,
+      data: data,
+    );
+  }
+
+  /// Enregistre une position GPS en temps réel
+  Future<void> recordPosition({
+    required double latitude,
+    required double longitude,
+    double? accuracy,
+    double? altitude,
+    double? speed,
+    double? heading,
+  }) async {
+    final userId = AuthService.instance.userId;
+    if (userId == null) {
+      throw Exception('Utilisateur non connecté');
+    }
+
+    await _realtimeService.recordPosition(
+      userId: userId,
+      latitude: latitude,
+      longitude: longitude,
+      accuracy: accuracy,
+      altitude: altitude,
+      speed: speed,
+      heading: heading,
+    );
+  }
+
+  /// Arrête l'écoute temps réel
+  Future<void> stopRealtimeListening() async {
+    await _realtimeService.stopListening();
+  }
+
   /// Nettoie les ressources
   void dispose() {
     if (AppConstants.enableLogging) {
