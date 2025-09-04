@@ -39,17 +39,39 @@ class GeolocationService {
       }
 
       if (permission == LocationPermission.deniedForever) {
-        // Guider l'utilisateur vers les réglages
-        await Geolocator.openAppSettings();
-        await Geolocator.openLocationSettings();
+        // Guider l'utilisateur vers les réglages (non supporté sur Web)
+        if (!kIsWeb) {
+          await Geolocator.openAppSettings();
+          await Geolocator.openLocationSettings();
+        }
         throw Exception('Permission de localisation refusée définitivement');
       }
 
-      // Demander la permission de localisation en arrière-plan
-      final backgroundPermission = await Permission.locationAlways.request();
-      if (backgroundPermission != PermissionStatus.granted) {
+      // Sur Web, on s'arrête ici (pas de demande via permission_handler)
+      if (kIsWeb) {
         if (AppConstants.enableLogging) {
-          print('⚠️ Permission de localisation en arrière-plan non accordée');
+          print('ℹ️ Web: permissions de localisation en avant-plan OK');
+        }
+        return true;
+      }
+
+      // Demander la permission de localisation en arrière-plan (non supporté sur web)
+      if (!kIsWeb) {
+        try {
+          final backgroundPermission = await Permission.locationAlways.request();
+          if (backgroundPermission != PermissionStatus.granted) {
+            if (AppConstants.enableLogging) {
+              print('⚠️ Permission de localisation en arrière-plan non accordée');
+            }
+          }
+        } catch (e) {
+          if (AppConstants.enableLogging) {
+            print('⚠️ LocationAlways non disponible sur cette plateforme: $e');
+          }
+        }
+      } else {
+        if (AppConstants.enableLogging) {
+          print('ℹ️ LocationAlways ignorée sur Web');
         }
       }
 

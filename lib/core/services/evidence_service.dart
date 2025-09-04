@@ -448,4 +448,75 @@ class EvidenceService {
       }
     }
   }
+
+  /// Récupère les preuves pour une alerte spécifique
+  Future<List<Map<String, dynamic>>> getEvidencesForAlert(String alertId) async {
+    try {
+      // Pour l'instant, retourner une liste vide
+      // TODO: Implémenter la récupération depuis Supabase
+      return [];
+    } catch (e) {
+      print('❌ Erreur lors de la récupération des preuves: $e');
+      return [];
+    }
+  }
+
+  /// Récupère toutes les preuves de l'utilisateur
+  Future<List<Map<String, dynamic>>> getEvidences() async {
+    try {
+      // Pour l'instant, retourner une liste vide
+      // TODO: Implémenter la récupération depuis Supabase
+      return [];
+    } catch (e) {
+      print('❌ Erreur lors de la récupération des preuves: $e');
+      return [];
+    }
+  }
+
+  /// Enregistre une preuve audio
+  Future<Map<String, dynamic>> recordAudioEvidence({
+    required String alertId,
+    required String filePath,
+    required int duration,
+  }) async {
+    try {
+      // Pour l'instant, simuler l'enregistrement
+      // TODO: Implémenter l'upload vers Supabase Storage
+      return {
+        'id': _uuid.v4(),
+        'type': 'audio',
+        'filePath': filePath,
+        'duration': duration,
+        'alertId': alertId,
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+    } catch (e) {
+      print('❌ Erreur lors de l\'enregistrement audio: $e');
+      rethrow;
+    }
+  }
+
+  /// Supprime une preuve
+  Future<void> deleteEvidence(String evidenceId) async {
+    try {
+      // Pour l'instant, simuler la suppression
+      // TODO: Implémenter la suppression depuis Supabase
+      print('🗑️ Suppression de la preuve: $evidenceId');
+    } catch (e) {
+      print('❌ Erreur lors de la suppression: $e');
+      rethrow;
+    }
+  }
+
+  /// Tente de synchroniser toutes les preuves
+  Future<int> attemptSyncAll() async {
+    try {
+      // Pour l'instant, simuler la synchronisation
+      // TODO: Implémenter la vraie synchronisation
+      return 0;
+    } catch (e) {
+      print('❌ Erreur lors de la synchronisation: $e');
+      return 0;
+    }
+  }
 }

@@ -5,6 +5,8 @@ import 'package:geolocator/geolocator.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/services/emergency_contact_service.dart';
+import '../../core/services/alert_service.dart';
+import '../../core/services/evidence_service.dart';
 import 'dart:async';
 
 /// Écran d'alerte d'urgence active avec design expert et 30 ans d'expérience
@@ -26,6 +28,11 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
   bool _isGpsTracking = false;
   bool _isAudioRecording = false;
   bool _isSynchronizing = false;
+  
+  // Variables pour l'alerte locale
+  Map<String, dynamic>? _currentAlert;
+  String? _alertId;
+  List<Map<String, dynamic>> _evidences = [];
   
   // Timer pour mettre à jour le temps écoulé
   Timer? _timer;
@@ -59,9 +66,44 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
     )..repeat();
   }
 
-  void _startAlert() {
+  void _startAlert() async {
     _alertStartTime = DateTime.now();
     _elapsedTime = Duration.zero;
+    
+    // Charger l'alerte locale actuelle
+    await _loadCurrentAlert();
+  }
+
+  /// Charge l'alerte locale actuelle
+  Future<void> _loadCurrentAlert() async {
+    try {
+      final alert = await AlertService.instance.getCurrentAlert();
+      if (alert != null) {
+        setState(() {
+          _currentAlert = alert;
+          _alertId = alert['id'] as String;
+        });
+        
+        // Charger les preuves associées
+        await _loadEvidences();
+      }
+    } catch (e) {
+      print('❌ Erreur lors du chargement de l\'alerte: $e');
+    }
+  }
+
+  /// Charge les preuves associées à l'alerte
+  Future<void> _loadEvidences() async {
+    try {
+      if (_alertId != null) {
+        final evidences = await EvidenceService.instance.getEvidencesForAlert(_alertId!);
+        setState(() {
+          _evidences = evidences;
+        });
+      }
+    } catch (e) {
+      print('❌ Erreur lors du chargement des preuves: $e');
+    }
   }
 
   void _startTimer() {
@@ -125,7 +167,7 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
   /// AppBar avec design expert et harmonie parfaite
   PreferredSizeWidget _buildExpertAppBar() {
     return AppBar(
-      elevation: 0,
+        elevation: 0,
       backgroundColor: AppConstants.primaryColor,
       foregroundColor: Colors.white,
       title: Row(
@@ -380,8 +422,8 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
                   ),
                 ),
                 child: const Icon(
-                  Icons.emergency,
-                  color: Colors.white,
+                    Icons.emergency,
+                    color: Colors.white,
                   size: 32,
                 ),
               );
@@ -389,10 +431,10 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
           ),
           const SizedBox(height: 16),
           // Titre principal
-          const Text(
+                  const Text(
             'ALERTE D\'URGENCE ACTIVE',
-            style: TextStyle(
-              color: Colors.white,
+                    style: TextStyle(
+                      color: Colors.white,
               fontSize: 22,
               fontWeight: FontWeight.w900,
               letterSpacing: 1.5,
@@ -401,11 +443,11 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
           ),
           const SizedBox(height: 8),
           // Timer avec design moderne
-          Container(
+              Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(20),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color: Colors.white.withValues(alpha: 0.3),
                 width: 1,
@@ -413,14 +455,14 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
             ),
             child: Text(
               'Durée: ${_formatDuration(_elapsedTime)}',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
                 fontWeight: FontWeight.w600,
               ),
-            ),
-          ),
-        ],
+                      ),
+                    ),
+                  ],
       ),
     );
   }
@@ -446,9 +488,9 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
             title: 'Contacts Alertés',
             subtitle: '3 contacts notifiés',
             color: AppConstants.secondaryColor,
-          ),
-        ),
-      ],
+                ),
+              ),
+            ],
     );
   }
 
@@ -566,7 +608,7 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
                   icon: Icons.gps_fixed,
                   title: 'Suivi GPS',
                   subtitle: _isGpsTracking ? 'Actif' : 'Inactif',
-                  isActive: _isGpsTracking,
+                isActive: _isGpsTracking,
                   color: AppConstants.primaryColor,
                   onTap: () => _toggleGpsService(),
                 ),
@@ -575,10 +617,10 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
               // Service Audio
               Expanded(
                 child: _buildModernStatusCard(
-                  icon: Icons.mic,
+                icon: Icons.mic,
                   title: 'Enregistrement',
                   subtitle: _isAudioRecording ? 'En cours' : 'Arrêté',
-                  isActive: _isAudioRecording,
+                isActive: _isAudioRecording,
                   color: AppConstants.secondaryColor,
                   onTap: () => _toggleAudioService(),
                 ),
@@ -590,10 +632,10 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
           
           // Service de synchronisation (pleine largeur)
           _buildModernStatusCard(
-            icon: Icons.sync,
+                icon: Icons.sync,
             title: 'Synchronisation',
             subtitle: _isSynchronizing ? 'Synchronisé' : 'En attente',
-            isActive: _isSynchronizing,
+                isActive: _isSynchronizing,
             color: AppConstants.accentColor,
             onTap: () => _toggleSyncService(),
             isFullWidth: true,
@@ -650,15 +692,15 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
           borderRadius: BorderRadius.circular(12),
           child: Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isActive 
+      decoration: BoxDecoration(
+        color: isActive 
                   ? color.withValues(alpha: 0.08)
                   : Colors.grey.withValues(alpha: 0.05),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
                 color: isActive ? color.withValues(alpha: 0.3) : Colors.grey.withValues(alpha: 0.2),
-                width: 1.5,
-              ),
+          width: 1.5,
+        ),
               boxShadow: [
                 BoxShadow(
                   color: isActive 
@@ -668,15 +710,15 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
                   offset: const Offset(0, 2),
                 ),
               ],
-            ),
-            child: Column(
-              children: [
-                // Icône avec animation si actif
-                if (isActive)
-                  AnimatedBuilder(
-                    animation: _statusController,
-                    builder: (context, child) {
-                      return Transform.scale(
+      ),
+      child: Column(
+        children: [
+          // Icône avec animation si actif
+          if (isActive)
+            AnimatedBuilder(
+              animation: _statusController,
+              builder: (context, child) {
+                return Transform.scale(
                         scale: 1.0 + (0.1 * _statusController.value),
                         child: Container(
                           padding: const EdgeInsets.all(12),
@@ -684,16 +726,16 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
                             color: color.withValues(alpha: 0.15),
                             shape: BoxShape.circle,
                           ),
-                          child: Icon(
-                            icon,
-                            color: color,
-                            size: 24,
+                  child: Icon(
+                    icon,
+                    color: color,
+                    size: 24,
                           ),
-                        ),
-                      );
-                    },
-                  )
-                else
+                  ),
+                );
+              },
+            )
+          else
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -701,36 +743,36 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
-                      icon,
+              icon,
                       color: Colors.grey[600],
-                      size: 24,
+              size: 24,
                     ),
-                  ),
-                
+            ),
+          
                 const SizedBox(height: 12),
-                
+          
                 // Titre
-                Text(
+          Text(
                   title,
-                  style: TextStyle(
+            style: TextStyle(
                     color: isActive ? color : Colors.grey[700],
                     fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                
-                const SizedBox(height: 4),
-                
+              fontWeight: FontWeight.w600,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          
+          const SizedBox(height: 4),
+          
                 // Sous-titre avec indicateur
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Container(
+          Container(
                       width: 6,
                       height: 6,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
                         color: isActive ? color : Colors.grey[400],
                       ),
                     ),
@@ -741,9 +783,9 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
                         color: isActive ? color : Colors.grey[600],
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
+            ),
+          ),
+        ],
                 ),
               ],
             ),
@@ -756,9 +798,9 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
   /// Actions rapides avec design harmonieux
   Widget _buildExpertQuickActions() {
     return Column(
-      children: [
-        Row(
-          children: [
+        children: [
+          Row(
+            children: [
             Expanded(
               child: _buildActionButton(
                 icon: Icons.phone,
@@ -766,21 +808,21 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
                 onPressed: _callNextContact,
                 color: AppConstants.primaryColor,
               ),
-            ),
-            const SizedBox(width: 12),
+              ),
+              const SizedBox(width: 12),
             Expanded(
               child: _buildActionButton(
                 icon: Icons.message,
                 label: 'Envoyer SMS',
                 onPressed: () => _sendEmergencySMS(),
                 color: AppConstants.secondaryColor,
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
         const SizedBox(height: 12),
         Row(
-          children: [
+                children: [
             Expanded(
               child: _buildActionButton(
                 icon: Icons.location_on,
@@ -788,17 +830,17 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
                 onPressed: () => _shareLocation(),
                 color: AppConstants.accentColor,
               ),
-            ),
-            const SizedBox(width: 12),
+                  ),
+                  const SizedBox(width: 12),
             Expanded(
               child: _buildActionButton(
                 icon: Icons.record_voice_over,
                 label: 'Enregistrer Audio',
                 onPressed: () => _recordAudio(),
                 color: AppConstants.warningColor,
-              ),
-            ),
-          ],
+                    ),
+                  ),
+                ],
         ),
       ],
     );
@@ -986,16 +1028,16 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
             padding: const EdgeInsets.all(20),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
+        children: [
+          Icon(
                   Icons.stop_circle_outlined,
                   color: AppConstants.errorColor,
                   size: 24,
                 ),
                 const SizedBox(width: 12),
-                Text(
+          Text(
                   'ANNULER L\'ALERTE',
-                  style: TextStyle(
+            style: TextStyle(
                     color: AppConstants.errorColor,
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
@@ -1044,11 +1086,14 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
             child: const Text('Continuer'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.of(context).pop(); // Fermer la boîte de dialogue
               
-              // TODO: Implémenter la logique d'annulation de l'alerte
-              print('🚨 Alerte annulée par l\'utilisateur');
+              // Annuler l'alerte via le service local
+              if (_alertId != null) {
+                await AlertService.instance.cancelAlert(_alertId!);
+                print('🚨 Alerte annulée par l\'utilisateur: $_alertId');
+              }
               
               // Retour à l'écran précédent
               Navigator.of(context).pop();

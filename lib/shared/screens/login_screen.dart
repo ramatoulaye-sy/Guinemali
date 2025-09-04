@@ -134,7 +134,7 @@ class _LoginScreenState extends State<LoginScreen> {
         const SizedBox(height: AppConstants.paddingSmall),
 
         Text(
-          'Connectez-vous avec votre prénom et votre code PIN',
+          'Connectez-vous avec votre pseudo et votre code PIN',
           style: theme.textTheme.bodyMedium?.copyWith(
             color: Colors.grey[600],
             height: 1.4,
@@ -210,12 +210,12 @@ class _LoginScreenState extends State<LoginScreen> {
                     .slideX(begin: 0.3)
                     .fadeIn(),
 
-                    // Champ prénom
+                    // Champ pseudo
       TextFormField(
         controller: _pseudoController,
         decoration: InputDecoration(
-          labelText: 'Prénom',
-          hintText: 'Entrez votre prénom',
+          labelText: 'Pseudo',
+          hintText: 'Entrez votre pseudo',
                   prefixIcon: const Icon(Icons.person_outline),
                   suffixIcon: _pseudoController.text.isNotEmpty
                       ? IconButton(
@@ -229,7 +229,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 textInputAction: TextInputAction.next,
                 autocorrect: false,
-                validator: _validatePrenom,
+                validator: _validatePseudo,
                 onChanged: (value) => setState(() {}),
               )
                   .animate()
@@ -393,16 +393,16 @@ class _LoginScreenState extends State<LoginScreen> {
         .fadeIn(delay: const Duration(milliseconds: 800));
   }
 
-  /// Valide le prénom
-  String? _validatePrenom(String? value) {
+  /// Valide le pseudo
+  String? _validatePseudo(String? value) {
     if (value == null || value.isEmpty) {
-      return 'Le prénom est requis';
+      return 'Le pseudo est requis';
     }
     if (value.length < 2) {
-      return 'Le prénom doit contenir au moins 2 caractères';
+      return 'Le pseudo doit contenir au moins 2 caractères';
     }
-    if (!RegExp(AppConstants.prenomPattern).hasMatch(value)) {
-      return 'Prénom invalide (lettres et espaces uniquement)';
+    if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(value)) {
+      return 'Pseudo invalide (lettres, chiffres et _ uniquement)';
     }
     return null;
   }
@@ -440,7 +440,7 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       // Utiliser l'AuthProvider au lieu du service direct
       final success = await context.read<AuthProvider>().login(
-        prenom: _pseudoController.text.trim(),
+        pseudo: _pseudoController.text.trim(),
         pin: _pinController.text.trim(),
       );
       

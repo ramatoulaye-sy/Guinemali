@@ -433,7 +433,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
             child: Text(
               'Besoin d\'aide ?',
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: const Color(0xFF945ACB), // Couleur primaire
+                color: AppConstants.primaryColor,
                 decoration: TextDecoration.underline,
               ),
             ),

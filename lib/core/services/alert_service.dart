@@ -8,6 +8,7 @@ import 'auth_service.dart';
 import 'geolocation_service.dart';
 import 'audio_recording_service.dart';
 import 'sync_service.dart';
+import 'realtime_service.dart';
 import 'dart:async';
 
 /// Service de gestion des alertes d'urgence
@@ -19,6 +20,7 @@ class AlertService {
 
   final _uuid = const Uuid();
   Timer? _locationSyncTimer;
+  final RealtimeService _realtimeService = RealtimeService();
 
   /// Crée une nouvelle alerte d'urgence
   Future<String> createEmergencyAlert({
@@ -38,28 +40,45 @@ class AlertService {
         print('🚨 Création d\'alerte pour utilisateur: $userId');
       }
 
-      final alertId = _uuid.v4();
-      
-      // Créer l'alerte dans la base de données
-      final alertData = {
-        'id': alertId,
-        'utilisateur_id': userId,
-        'latitude': latitude,
-        'longitude': longitude,
-        'type_alerte': type,
-        'niveau_danger': dangerLevel,
-        'statut': 'active',
-        'description': description,
-        'timestamp': DateTime.now().toUtc().toIso8601String(),
-      };
-
+      // Utiliser la fonction RPC existante pour créer l'alerte avec notifications
+      String alertId;
       try {
-        await SupabaseService.instance.insert('alertes', alertData);
-      } catch (e) {
-        // Ajouter à la file de synchronisation si le réseau/Supabase échoue
-        if (AppConstants.enableLogging) {
-          print('⚠️ INSERT Supabase échoué, ajout à la file de sync: $e');
+        final result = await SupabaseService.instance.rpc(
+          'creer_alerte_avec_notifications',
+          params: {
+            'p_utilisateur_id': userId,
+            'p_latitude': latitude,
+            'p_longitude': longitude,
+            'p_type_alerte': type,
+            'p_niveau_danger': dangerLevel,
+            'p_description': description,
+          },
+        );
+        
+        if (result == null) {
+          throw Exception('Échec de la création de l\'alerte');
         }
+        
+        alertId = result.toString();
+      } catch (e) {
+        // Fallback: créer l'alerte localement si la fonction RPC échoue
+        if (AppConstants.enableLogging) {
+          print('⚠️ Fonction RPC échouée, création locale: $e');
+        }
+        
+        alertId = _uuid.v4();
+        final alertData = {
+          'id': alertId,
+          'utilisateur_id': userId,
+          'latitude': latitude,
+          'longitude': longitude,
+          'type_alerte': type,
+          'niveau_danger': dangerLevel,
+          'statut': 'active',
+          'description': description,
+          'timestamp': DateTime.now().toUtc().toIso8601String(),
+        };
+        
         await SyncService.instance.addToSyncQueue('alerte', alertData);
       }
 
@@ -78,7 +97,18 @@ class AlertService {
       } catch (_) {}
 
       // Toujours marquer localement pour lecture immédiate côté app
-      await _saveAlertLocally(alertData);
+      final alertDataForLocal = {
+        'id': alertId,
+        'utilisateur_id': userId,
+        'latitude': latitude,
+        'longitude': longitude,
+        'type_alerte': type,
+        'niveau_danger': dangerLevel,
+        'statut': 'active',
+        'description': description,
+        'timestamp': DateTime.now().toUtc().toIso8601String(),
+      };
+      await _saveAlertLocally(alertDataForLocal);
 
       // Démarrer le tracking GPS en arrière-plan pour cette alerte
       try {
@@ -199,8 +229,27 @@ class AlertService {
   /// Annule une alerte active
   Future<void> cancelAlert(String alertId) async {
     try {
-      // Utiliser un statut valide selon la contrainte (active, resolue, fausse_alerte, en_cours)
-      await updateAlertStatus(alertId, 'fausse_alerte');
+      final userId = AuthService.instance.userId;
+      if (userId == null) {
+        throw Exception('Utilisateur non connecté');
+      }
+
+      // Utiliser la fonction RPC existante pour résoudre l'alerte
+      try {
+        await SupabaseService.instance.rpc(
+          'resoudre_alerte',
+          params: {
+            'p_alerte_id': alertId,
+            'p_utilisateur_id': userId,
+          },
+        );
+      } catch (e) {
+        // Fallback: utiliser la méthode classique
+        if (AppConstants.enableLogging) {
+          print('⚠️ Fonction RPC resoudre_alerte échouée, fallback: $e');
+        }
+        await updateAlertStatus(alertId, 'cancelled');
+      }
       
       // Notifier l'annulation
       await NotificationService.instance.sendCancelNotification(alertId);
@@ -449,6 +498,117 @@ class AlertService {
       if (AppConstants.enableLogging) {
         print('❌ Erreur lors de l\'annulation de l\'alerte: $e');
       }
+      rethrow;
+    }
+  }
+
+  /// Récupère l'historique des alertes
+  Future<List<Map<String, dynamic>>> getAlertHistory() async {
+    try {
+      final userId = AuthService.instance.userId;
+      if (userId == null) {
+        throw Exception('Utilisateur non connecté');
+      }
+
+      final response = await SupabaseService.instance.select(
+        'alertes',
+        filters: {'utilisateur_id': userId},
+        // Certaines bases utilisent 'timestamp' pour l'horodatage
+        orderBy: 'timestamp',
+        ascending: false,
+      );
+
+      // Normaliser les clés attendues par l'UI
+      final List<Map<String, dynamic>> items = [];
+      for (final row in response) {
+        final map = Map<String, dynamic>.from(row);
+        items.add({
+          'id': map['id'],
+          // UI accepte 'status' ou 'statut' → on fournit 'status'
+          'status': map['statut'] ?? map['status'] ?? 'active',
+          // UI regarde 'timestamp' ou 'time' → on fournit 'timestamp' depuis 'date_creation'
+          'timestamp': map['date_creation'] ?? map['timestamp'] ?? map['time'],
+          'latitude': map['latitude'],
+          'longitude': map['longitude'],
+          'type_alerte': map['type_alerte'],
+          'niveau_danger': map['niveau_danger'],
+          'description': map['description'],
+        });
+      }
+
+      return items;
+    } catch (e) {
+      print('❌ Erreur lors de la récupération de l\'historique: $e');
+      return [];
+    }
+  }
+
+  /// Récupère l'alerte actuelle
+  Future<Map<String, dynamic>?> getCurrentAlert() async {
+    try {
+      final alertId = StorageService.instance.getString(AppConstants.keyCurrentAlertId);
+      if (alertId == null) return null;
+
+      final response = await SupabaseService.instance.select(
+        'alertes',
+        filters: {'id': alertId},
+        limit: 1,
+      );
+
+      if (response.isNotEmpty) {
+        return Map<String, dynamic>.from(response.first);
+      }
+      return null;
+    } catch (e) {
+      print('❌ Erreur lors de la récupération de l\'alerte actuelle: $e');
+      return null;
+    }
+  }
+
+  /// Vide l'historique des alertes
+  Future<void> clearAlertHistory() async {
+    try {
+      final userId = AuthService.instance.userId;
+      if (userId == null) {
+        throw Exception('Utilisateur non connecté');
+      }
+
+      await SupabaseService.instance.delete(
+        'alertes',
+        idColumn: 'utilisateur_id',
+        idValue: userId,
+      );
+    } catch (e) {
+      print('❌ Erreur lors du vidage de l\'historique: $e');
+      rethrow;
+    }
+  }
+
+  /// Génère un rapport d'alerte
+  Future<Map<String, dynamic>> generateAlertReport(String alertId) async {
+    try {
+      final response = await SupabaseService.instance.select(
+        'alertes',
+        filters: {'id': alertId},
+        limit: 1,
+      );
+
+      if (response.isEmpty) {
+        throw Exception('Alerte non trouvée');
+      }
+
+      final alert = response.first;
+      return {
+        'id': alert['id'],
+        'date': alert['date_creation'],
+        'statut': alert['statut'],
+        'position': '${alert['latitude']}, ${alert['longitude']}',
+        'type': alert['type_alerte'],
+        'niveau_danger': alert['niveau_danger'],
+        'description': alert['description'],
+      };
+    } catch (e) {
+      print('❌ Erreur lors de la génération du rapport: $e');
       rethrow;
     }
   }

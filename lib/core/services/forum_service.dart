@@ -1,8 +1,8 @@
 import 'dart:async';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../protected_person/models/forum_post_model.dart';
 import '../constants/app_constants.dart';
 import 'storage_service.dart';
+import 'supabase_service.dart';
 import 'log_service.dart';
 
 /// Service centralisé pour la gestion du forum selon le document technique
@@ -13,7 +13,7 @@ class ForumService {
 
   ForumService._();
 
-  final SupabaseClient _supabase = Supabase.instance.client;
+  final SupabaseService _supabase = SupabaseService.instance;
   final StorageService _storage = StorageService.instance;
 
   // Cache local pour les messages
@@ -31,41 +31,28 @@ class ForumService {
         return _allMessages.where((msg) => msg.isApproved).toList();
       }
 
-      // Pour l'instant, retourner des données de test conformes au document technique
-      // TODO: Implémenter la vraie requête Supabase quand la table sera créée
-      final testMessages = [
-        ForumPost(
-          utilisateurId: 'user_1',
-          contenu: 'Partagez vos conseils et astuces pour rester en sécurité au quotidien. La solidarité entre nous est notre force.',
-          valide: true, // Approuvé par la modération
-        ),
-        ForumPost(
-          utilisateurId: 'user_2',
-          contenu: 'Un espace pour s\'entraider et se soutenir mutuellement. N\'hésitez pas à partager vos expériences.',
-          valide: true, // Approuvé par la modération
-        ),
-        ForumPost(
-          utilisateurId: 'user_3',
-          contenu: 'Informations sur les droits et les ressources juridiques disponibles. Connaître ses droits est essentiel.',
-          valide: true, // Approuvé par la modération
-        ),
-        ForumPost(
-          utilisateurId: 'user_4',
-          contenu: 'Message en attente de modération...',
-          valide: false, // En attente de modération
-        ),
-      ];
+      // Récupérer les messages depuis Supabase
+      final response = await _supabase.select(
+        'forum_messages',
+        filters: {'valide': true}, // Seulement les messages approuvés
+        orderBy: 'date_post',
+        ascending: false,
+        limit: 50,
+      );
+
+      final messages = (response as List?)?.cast<Map<String, dynamic>>() ?? [];
+      final forumPosts = messages.map((data) => _createForumPostFromData(data)).toList();
 
       // Mettre à jour le cache
       _allMessages.clear();
-      _allMessages.addAll(testMessages);
+      _allMessages.addAll(forumPosts);
       
-      for (final message in testMessages) {
+      for (final message in forumPosts) {
         _messagesCache[message.id] = message;
       }
 
       // Retourner seulement les messages approuvés (CONSULTATION ANONYME)
-      final approvedMessages = testMessages.where((msg) => msg.isApproved).toList();
+      final approvedMessages = forumPosts.where((msg) => msg.isApproved).toList();
 
       LogService.success('${approvedMessages.length} messages approuvés récupérés (anonyme)', tag: 'forum');
       return approvedMessages;
@@ -96,19 +83,35 @@ class ForumService {
         throw Exception('Le contenu contient des éléments inappropriés');
       }
 
-      final message = ForumPost(
-        utilisateurId: userId,
-        contenu: contenu,
-        valide: false, // Par défaut en attente de modération (MODÉRATION A PRIORI)
-      );
+      // Créer l'objet message pour validation (non utilisé pour l'insertion)
+      // final message = ForumPost(
+      //   utilisateurId: userId,
+      //   contenu: contenu,
+      //   valide: false, // Par défaut en attente de modération (MODÉRATION A PRIORI)
+      // );
 
-      // Pour l'instant, simuler la création
-      // TODO: Implémenter la vraie insertion Supabase quand la table sera créée
-      _messagesCache[message.id] = message;
-      _allMessages.insert(0, message);
+      // Insérer le message dans Supabase
+      final messageData = {
+        'utilisateur_id': userId,
+        'contenu': contenu,
+        'valide': false, // En attente de modération
+        'date_post': DateTime.now().toIso8601String(),
+      };
 
-      LogService.success('Message créé et en attente de modération: ${message.id}', tag: 'forum');
-      return message;
+      final response = await _supabase.insert('forum_messages', messageData);
+      
+      if (response != null && response.isNotEmpty) {
+        final createdData = response.first;
+        final createdMessage = _createForumPostFromData(createdData);
+        
+        _messagesCache[createdMessage.id] = createdMessage;
+        _allMessages.insert(0, createdMessage);
+        
+        LogService.success('Message créé et en attente de modération: ${createdMessage.id}', tag: 'forum');
+        return createdMessage;
+      }
+      
+      return null;
     } catch (e) {
       LogService.error('Erreur lors de la création du message: $e', tag: 'forum');
       return null;
@@ -154,8 +157,16 @@ class ForumService {
     try {
       LogService.info('Récupération des messages en attente de modération', tag: 'forum');
       
-      // Retourner seulement les messages en attente
-      return _allMessages.where((msg) => msg.isPendingModeration).toList();
+      // Récupérer depuis Supabase
+      final response = await _supabase.select(
+        'forum_messages',
+        filters: {'valide': false}, // Messages en attente
+        orderBy: 'date_post',
+        ascending: false,
+      );
+
+      final messages = (response as List?)?.cast<Map<String, dynamic>>() ?? [];
+      return messages.map((data) => _createForumPostFromData(data)).toList();
     } catch (e) {
       LogService.error('Erreur lors de la récupération des messages en attente: $e', tag: 'forum');
       return [];
@@ -167,6 +178,18 @@ class ForumService {
     try {
       LogService.info('Approbation du message: $messageId', tag: 'forum');
       
+      // Mettre à jour dans Supabase
+      await _supabase.update(
+        'forum_messages',
+        {
+          'valide': true,
+          'date_moderation': DateTime.now().toIso8601String(),
+        },
+        idColumn: 'id',
+        idValue: messageId,
+      );
+      
+      // Mettre à jour le cache local
       final message = _messagesCache[messageId];
       if (message != null) {
         final approvedMessage = message.copyWith(valide: true);
@@ -177,12 +200,10 @@ class ForumService {
         if (index != -1) {
           _allMessages[index] = approvedMessage;
         }
-        
-        LogService.success('Message approuvé: $messageId', tag: 'forum');
-        return true;
       }
       
-      return false;
+      LogService.success('Message approuvé: $messageId', tag: 'forum');
+      return true;
     } catch (e) {
       LogService.error('Erreur lors de l\'approbation du message: $e', tag: 'forum');
       return false;
@@ -193,6 +214,13 @@ class ForumService {
   Future<bool> rejectMessage(String messageId) async {
     try {
       LogService.info('Rejet du message: $messageId', tag: 'forum');
+      
+      // Supprimer de Supabase
+      await _supabase.delete(
+        'forum_messages',
+        idColumn: 'id',
+        idValue: messageId,
+      );
       
       // Supprimer du cache et de la liste
       _messagesCache.remove(messageId);
@@ -218,5 +246,18 @@ class ForumService {
     clearCache();
     await getAllMessages();
     LogService.info('Données du forum rafraîchies', tag: 'forum');
+  }
+
+  /// Crée un objet ForumPost à partir des données de la base
+  ForumPost _createForumPostFromData(Map<String, dynamic> data) {
+    return ForumPost(
+      id: data['id']?.toString() ?? '',
+      utilisateurId: data['utilisateur_id']?.toString() ?? '',
+      contenu: data['contenu']?.toString() ?? '',
+      valide: data['valide'] == true,
+      datePost: data['date_post'] != null 
+          ? DateTime.tryParse(data['date_post'].toString()) ?? DateTime.now()
+          : DateTime.now(),
+    );
   }
 }

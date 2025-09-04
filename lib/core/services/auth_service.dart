@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:crypto/crypto.dart';
 import 'dart:convert';
+import 'package:uuid/uuid.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_model.dart';
 import '../models/auth_models.dart';
@@ -18,6 +19,7 @@ class AuthService {
 
   final SupabaseService _supabase = SupabaseService.instance;
   final StorageService _storage = StorageService.instance;
+  final _uuid = const Uuid();
 
   /// Stream des changements d'état d'authentification
   Stream<AuthState> get authStateChanges => _supabase.authStateChanges;
@@ -86,21 +88,7 @@ class AuthService {
     }
   }
 
-  // Générer un email temporaire unique unique
-  String _generateTempEmail(String prenom) {
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final sanitizedPrenom = prenom.toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]'), '');
-    return '${sanitizedPrenom}_$timestamp@gmail.com';
-  }
 
-  // Générer un pseudo unique basé sur le prénom
-  String _generateUniquePseudo(String prenom) {
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final sanitizedPrenom = prenom.toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]'), '');
-    return '${sanitizedPrenom}_$timestamp';
-  }
 
   /// Inscription d'un nouvel utilisateur
   Future<UserModel> register(RegistrationData registrationData) async {
@@ -121,33 +109,44 @@ class AuthService {
         throw Exception('Impossible de se connecter à Supabase: $e');
       }
       
-      // Créer l'utilisateur dans Supabase Auth
-      print('🚀 Création utilisateur Supabase Auth...');
-      final authResponse = await _supabase.signUpWithEmail(
-        email: '${registrationData.pseudo}@temp.guinemali.local',
-        password: registrationData.pin,
+      // Vérifier d'abord si le pseudo existe déjà
+      print('🔍 Vérification de la disponibilité du pseudo...');
+      final existingUser = await _supabase.select(
+        'utilisateurs',
+        columns: 'id',
+        filters: {'pseudo': registrationData.pseudo},
+        limit: 1,
       );
       
-      if (authResponse.user == null) {
-        throw Exception('Échec de la création de l\'utilisateur');
+      if (existingUser != null && existingUser.isNotEmpty) {
+        throw Exception('Ce pseudo est déjà utilisé');
       }
       
-      print('✅ Utilisateur créé dans Supabase Auth: ${authResponse.user!.id}');
+      // Générer un UUID pour l'utilisateur (sans Supabase Auth)
+      print('📝 Génération de l\'ID utilisateur...');
+      final userId = _uuid.v4();
+      print('✅ ID utilisateur généré: $userId');
       
-      // Insérer dans la table utilisateurs
-      print('📝 Insertion dans la table utilisateurs...');
-      final userData = {
-        'id': authResponse.user!.id,
+       // Préparer les données avec gestion des champs obligatoires et optionnels
+      final userData = <String, dynamic>{
+        'id': userId,
         'pseudo': registrationData.pseudo,
-        'prenom': registrationData.prenom,
-        'pin_chiffre': registrationData.pin,
-        'num_tel': registrationData.numTel,
+        'prenom': registrationData.prenom.isNotEmpty ? registrationData.prenom : registrationData.pseudo, // Prénom obligatoire
+        'pin_chiffre': _hashPin(registrationData.pin), // Hasher le PIN
         'type_utilisateur': registrationData.typeUtilisateur == UserType.victime ? 'victime' : 'aidant',
-        'langue': registrationData.langue,
-        'region': registrationData.region,
         'actif': true,
-        'date_creation': DateTime.now().toIso8601String(),
       };
+      
+      // Ajouter les champs optionnels seulement s'ils existent
+      if (registrationData.numTel.isNotEmpty) {
+        userData['num_tel'] = registrationData.numTel;
+      }
+      if (registrationData.langue != null) {
+        userData['langue'] = registrationData.langue;
+      }
+      if (registrationData.region != null) {
+        userData['region'] = registrationData.region;
+      }
       
       print(' Données à insérer: $userData');
       
@@ -177,7 +176,29 @@ class AuthService {
     } catch (e) {
       print('❌ Erreur détaillée lors de l\'inscription: $e');
       print('📚 Stack trace: ${StackTrace.current}');
-      throw Exception('Échec de l\'inscription: $e');
+      
+      // Analyser le type d'erreur pour donner un message plus précis
+      String errorMessage = 'Échec de l\'inscription';
+      
+      if (e.toString().contains('duplicate key value')) {
+        if (e.toString().contains('pseudo')) {
+          errorMessage = 'Ce pseudo est déjà utilisé';
+        } else if (e.toString().contains('num_tel')) {
+          errorMessage = 'Ce numéro de téléphone est déjà utilisé';
+        } else {
+          errorMessage = 'Cette information est déjà utilisée par un autre utilisateur';
+        }
+      } else if (e.toString().contains('violates check constraint')) {
+        errorMessage = 'Les données saisies ne respectent pas les contraintes';
+      } else if (e.toString().contains('permission denied')) {
+        errorMessage = 'Erreur de permissions - contactez le support';
+      } else if (e.toString().contains('connection')) {
+        errorMessage = 'Erreur de connexion - vérifiez votre réseau';
+      } else {
+        errorMessage = 'Erreur lors de l\'inscription: ${e.toString()}';
+      }
+      
+      throw Exception(errorMessage);
     }
   }
 
@@ -185,8 +206,25 @@ class AuthService {
   Future<UserModel> login(LoginData loginData) async {
     try {
       print('🔐 === DÉBUT DE LA CONNEXION ===');
-      print('🔍 Tentative de connexion pour: ${loginData.prenom}');
+      print('🔍 Tentative de connexion pour: ${loginData.pseudo}');
       
+      // Protection anti-bruteforce simple (stockage local)
+      const int maxAttempts = 5;
+      const int cooldownSeconds = 60;
+
+      final String keyAttempts = 'login_failed_count_${loginData.pseudo}';
+      final String keyLockUntil = 'login_lock_until_${loginData.pseudo}';
+
+      final int failedAttempts = _storage.getInt(keyAttempts, defaultValue: 0);
+      final String? lockUntilIso = _storage.getString(keyLockUntil);
+      if (lockUntilIso != null) {
+        final lockUntil = DateTime.tryParse(lockUntilIso);
+        if (lockUntil != null && DateTime.now().isBefore(lockUntil)) {
+          final remaining = lockUntil.difference(DateTime.now()).inSeconds;
+          throw Exception('Trop de tentatives. Réessayez dans ${remaining}s');
+        }
+      }
+
       // MODE DE TEST TEMPORAIRE - Contourner Supabase pour les tests
       if (AppConstants.enableTestMode) {
         print('🧪 MODE DE TEST ACTIVÉ - Connexion simulée');
@@ -194,8 +232,8 @@ class AuthService {
         // Créer un utilisateur de test
         final testUser = UserModel(
           id: 'test_user_id_${DateTime.now().millisecondsSinceEpoch}',
-          prenom: loginData.prenom,
-          pseudo: loginData.prenom.toLowerCase(),
+          prenom: loginData.pseudo, // Utiliser pseudo comme prenom pour le test
+          pseudo: loginData.pseudo,
           typeUtilisateur: UserType.victime,
           dateCreation: DateTime.now(),
         );
@@ -209,23 +247,46 @@ class AuthService {
       
       // MODE NORMAL - Utiliser Supabase
       final hashedPin = _hashPin(loginData.pin);
-      final userResponse = await _supabase.rpc(
-        'login_by_pseudo_hash',
-        params: {
-          'p_pseudo': loginData.prenom,
-          'p_pin_hash': hashedPin,
+
+      // 1) Récupérer l'utilisateur par pseudo et actif
+      final userResponse = await _supabase.select(
+        'utilisateurs',
+        filters: {
+          'pseudo': loginData.pseudo,
+          'actif': true,
         },
+        limit: 1,
       );
 
-      print('📊 Réponse RPC: $userResponse');
+      print('📊 Réponse utilisateur: $userResponse');
 
       if (userResponse == null || userResponse.isEmpty) {
-        print('❌ Utilisateur non trouvé ou PIN incorrect');
-        await _handleFailedLogin(loginData.prenom);
-        throw Exception('Identifiants incorrects');
+        print('❌ Utilisateur introuvable ou inactif');
+        await _handleFailedLogin(loginData.pseudo);
+        // Incrémente les échecs et applique cooldown si nécessaire
+        await _storage.setInt(keyAttempts, failedAttempts + 1);
+        if (failedAttempts + 1 >= maxAttempts) {
+          final until = DateTime.now().add(const Duration(seconds: cooldownSeconds));
+          await _storage.saveString(keyLockUntil, until.toIso8601String());
+        }
+        throw Exception('Pseudo introuvable');
       }
 
       final userData = userResponse.first;
+
+      // 2) Vérifier le PIN localement pour éviter tout problème de filtre côté serveur
+      final storedHash = (userData['pin_chiffre'] ?? '').toString();
+      if (storedHash.isEmpty || storedHash != hashedPin) {
+        print('❌ PIN incorrect pour ${loginData.pseudo}');
+        await _handleFailedLogin(loginData.pseudo);
+        // Incrémente les échecs et applique cooldown si nécessaire
+        await _storage.setInt(keyAttempts, failedAttempts + 1);
+        if (failedAttempts + 1 >= maxAttempts) {
+          final until = DateTime.now().add(const Duration(seconds: cooldownSeconds));
+          await _storage.saveString(keyLockUntil, until.toIso8601String());
+        }
+        throw Exception('PIN incorrect');
+      }
       print('📝 Données utilisateur récupérées: ${userData.keys}');
       print('✅ Identifiants valides, connexion autorisée');
 
@@ -233,15 +294,19 @@ class AuthService {
       final userModel = UserModel.fromJson(userData);
       _currentUser = userModel;
 
-      // Mettre à jour la dernière connexion
-      await _updateLastLogin(userModel.id);
+      // Mettre à jour la dernière connexion avec la fonction RPC existante
+      await _updateLastLoginSecure(userModel.id);
 
       // Sauvegarder localement
       await _saveUserDataLocally(userModel);
 
+      // Réinitialiser le compteur d'échecs
+      await _storage.setInt(keyAttempts, 0);
+      await _storage.remove(keyLockUntil);
+
       // Journaliser la connexion
       await _logAction('connexion', {
-        'prenom': loginData.prenom,
+        'pseudo': loginData.pseudo,
       });
 
       if (AppConstants.enableLogging) {
@@ -333,31 +398,31 @@ class AuthService {
     }
   }
 
-  /// Vérifie si un prénom/pseudo est disponible
-  Future<bool> isPrenomAvailable(String prenom) async {
+  /// Vérifie si un pseudo est disponible
+  Future<bool> isPseudoAvailable(String pseudo) async {
     try {
-      print('🔍 Vérification prénom: $prenom');
+      print('🔍 Vérification pseudo: $pseudo');
       
       // Vérifier le pseudo (colonne existante en base)
       final response = await _supabase.select(
         'utilisateurs',
         columns: 'id',
-        filters: {'pseudo': prenom},
+        filters: {'pseudo': pseudo},
         limit: 1,
       );
 
-      print('📊 Réponse vérification prénom: $response');
+      print('📊 Réponse vérification pseudo: $response');
       
       // response est maintenant directement une List
       final isAvailable = response == null || response.isEmpty;
-      print('✅ Prénom disponible: $isAvailable');
+      print('✅ Pseudo disponible: $isAvailable');
       
       return isAvailable;
     } catch (e) {
-      print('❌ Erreur vérification prénom: $e');
-      // En cas d'erreur, on considère que le prénom est disponible pour permettre l'inscription
+      print('❌ Erreur vérification pseudo: $e');
+      // En cas d'erreur, on considère que le pseudo est disponible pour permettre l'inscription
       // Cela évite de bloquer l'inscription à cause d'un problème de connexion
-      print('⚠️ Erreur de connexion, on considère le prénom comme disponible');
+      print('⚠️ Erreur de connexion, on considère le pseudo comme disponible');
       return true;
     }
   }
@@ -391,14 +456,13 @@ class AuthService {
     }
   }
 
-  /// Met à jour la dernière connexion
-  Future<void> _updateLastLogin(String userId) async {
+  /// Met à jour la dernière connexion avec la fonction RPC existante
+  Future<void> _updateLastLoginSecure(String userId) async {
     try {
-      await _supabase.update(
-        'utilisateurs',
-        {'derniere_connexion': DateTime.now().toIso8601String()},
-        idColumn: 'id',
-        idValue: userId,
+      // Adapter au nom de paramètre réel de la fonction RPC (p_id)
+      await _supabase.rpc(
+        'update_last_login_secure',
+        params: {'p_id': userId},
       );
     } catch (e) {
       if (AppConstants.enableLogging) {

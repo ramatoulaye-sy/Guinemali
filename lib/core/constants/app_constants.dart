@@ -13,7 +13,7 @@ class AppConstants {
   // Mode debug et logging
   static const bool enableDebugMode = true;
   static const bool enableLogging = true;
-  static const bool enableTestMode = true; // MODE DE TEST TEMPORAIRE - Activer pour tester sans Supabase
+  static const bool enableTestMode = false; // MODE NORMAL - Supabase Pro activé
   
   // Routes de navigation
   static const String routeWelcome = '/welcome';
@@ -32,6 +32,9 @@ class AppConstants {
   static const String routeVictimProfile = '/victim/profile';
   static const String routeVictimForum = '/victim/forum';
   static const String routeVictimRecordEvidence = '/victim/record-evidence';
+  static const String routePermissions = '/victim/permissions';
+  static const String routeVictimSecurity = '/victim/security';
+  static const String routeVictimLiveMap = '/victim/live-map';
   static const String routeHelperHome = '/helper/home';
   static const String routeONGHome = '/ong/home';
   static const String routeAdminHome = '/admin/home';

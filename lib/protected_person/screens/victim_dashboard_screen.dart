@@ -8,12 +8,15 @@ import '../../core/providers/auth_provider.dart';
 import '../../core/services/geolocation_service.dart';
 import '../../core/services/alert_service.dart';
 import '../../core/services/evidence_service.dart';
-import '../../core/services/emergency_contact_service.dart';
+import '../../core/services/notification_service.dart';
+import '../../core/services/storage_service.dart';
 import 'dart:async';
+import 'dart:convert';
 import '../../core/models/user_model.dart';
 import '../widgets/menu_modal.dart';
 import '../../shared/screens/app_lock_screen.dart';
 import '../../core/services/security_service.dart';
+import '../../core/services/local_push_service.dart';
 
 /// Écran d'accueil principal avec dashboard complet
 class VictimDashboardScreen extends StatefulWidget {
@@ -157,12 +160,13 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
         child: Column(
           children: [
             // Header avec logo, nom utilisateur et icônes de statut
             _buildHeader(user),
-            
+
             // Contenu principal centré
             Expanded(
               child: Column(
@@ -170,30 +174,25 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
                 children: [
                   // Bouton SOS principal
                   _buildSOSButton(),
-                  
+
                   const SizedBox(height: 32),
-                  
+
                   // Bouton Actions Rapides
                   _buildQuickActionsButton(),
                 ],
               ),
             ),
-            
-            // Footer avec navigation
-            _buildFooter(),
           ],
         ),
       ),
+      bottomNavigationBar: _buildFooter(),
     );
   }
 
   /// Construit le header avec logo, nom utilisateur et icônes de statut
   Widget _buildHeader(UserModel? user) {
     return Container(
-
-
-      
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -219,8 +218,8 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 45,
-                height: 45,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: Colors.white.withOpacity(0.2),
@@ -247,10 +246,10 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
               const Text(
                 'Guinémali',
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: 10,
                   fontWeight: FontWeight.w600,
                   color: Colors.white,
-                  letterSpacing: 0.5,
+                  letterSpacing: 0.3,
                 ),
               ),
             ],
@@ -267,7 +266,7 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
                 Text(
                   user?.prenom ?? 'Utilisateur',
                   style: const TextStyle(
-                    fontSize: 20,
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                     letterSpacing: 0.3,
@@ -277,7 +276,7 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
                 Text(
                   'Votre Sécurité, notre priorité',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 11,
                     color: Colors.white.withOpacity(0.9),
                     fontWeight: FontWeight.w400,
                     fontStyle: FontStyle.italic,
@@ -297,8 +296,8 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
               GestureDetector(
                 onTap: () => _showProfileOptions(user),
                 child: Container(
-                  width: 36,
-                  height: 36,
+                  width: 32,
+                  height: 32,
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.2),
                     shape: BoxShape.circle,
@@ -310,12 +309,12 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
                   child: const Icon(
                     Icons.person_outline,
                     color: Colors.white,
-                    size: 20,
+                    size: 18,
                   ),
                 ),
               ),
               
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               
               // Icônes de statut en ligne horizontale
               Row(
@@ -366,7 +365,7 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: isActive 
                   ? Colors.white.withValues(alpha: 0.2)
@@ -389,7 +388,7 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
             ),
             child: Icon(
               icon,
-              size: 18,
+              size: 16,
               color: isActive 
                   ? color  // L'icône prend la couleur naturelle quand active
                   : Colors.white.withValues(alpha: 0.6), // Blanc transparent quand inactive
@@ -1012,7 +1011,7 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
             GestureDetector(
               onTap: () => _triggerEmergency(),
               child: Container(
-                width: 280, // Taille optimisée pour l'harmonie
+                width: 280, // Taille fixe comme avant
                 height: 280,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
@@ -1146,7 +1145,7 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
       // 3. Obtenir la position actuelle
       final position = await GeolocationService.instance.getCurrentPosition();
       
-      // 4. Créer l'alerte d'urgence
+      // 4. Créer l'alerte d'urgence via Supabase
       final alertId = await AlertService.instance.createEmergencyAlert(
         latitude: position.latitude,
         longitude: position.longitude,
@@ -1162,7 +1161,7 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
       await _sendCommunityAlert(position.latitude, position.longitude, alertId);
 
       // 7. Notifier les contacts d'urgence
-      await _notifyEmergencyContacts(alertId, position);
+      await _notifyEmergencyContactsLocal(alertId, position);
 
       // 8. Démarrer le suivi GPS continu
       await _startContinuousGPSTracking(alertId, position);
@@ -1170,6 +1169,12 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
       // 9. Afficher le message de succès avec option d'annulation
       if (mounted) {
         _showEmergencySuccessWithCancel(alertId);
+        // Notification locale persistante
+        LocalPushService.instance.showPersistent(
+          id: 1001,
+          title: 'Alerte active',
+          body: 'Votre alerte est en cours. Appuyez pour revenir à l\'app.',
+        );
         
         // 10. Rediriger immédiatement vers l'écran d'alerte active
         context.push(AppConstants.routeVictimActiveAlert);
@@ -1439,9 +1444,34 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
         print('⚠️ Enregistrement vidéo non disponible: $e');
       }
 
+      // Enregistrer l'événement dans le service local
+      await _logDiscreteRecordingEvent(alertId);
+
       print('🎤 Enregistrement discret démarré pour l\'alerte: $alertId');
+      // Notification enregistr.
+      LocalPushService.instance.showPersistent(
+        id: 1002,
+        title: 'Enregistrement en cours',
+        body: 'Preuve audio/vidéo en cours...',
+      );
     } catch (e) {
       print('❌ Erreur lors du démarrage de l\'enregistrement: $e');
+    }
+  }
+
+  /// Enregistre l'événement d'enregistrement discret
+  Future<void> _logDiscreteRecordingEvent(String alertId) async {
+    try {
+      final event = {
+        'alertId': alertId,
+        'type': 'discrete_recording_started',
+        'timestamp': DateTime.now().toIso8601String(),
+        'status': 'active',
+      };
+      
+      await StorageService.instance.saveString('discrete_recording_$alertId', jsonEncode(event));
+    } catch (e) {
+      print('❌ Erreur lors de l\'enregistrement de l\'événement: $e');
     }
   }
 
@@ -1463,20 +1493,23 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
     }
   }
 
-  /// Notifie les contacts d'urgence
-  Future<void> _notifyEmergencyContacts(String alertId, dynamic position) async {
+  /// Notifie les contacts d'urgence (version locale)
+  Future<void> _notifyEmergencyContactsLocal(String alertId, dynamic position) async {
     try {
       print('📞 Notification des contacts d\'urgence...');
       
-      // Utiliser le service d'urgence pour notifier tous les contacts
-      await EmergencyContactService.instance.callAllContactsWithFallback();
+      // Récupérer le message personnalisé
+      final customMessage = StorageService.instance.getString('custom_sos_message');
       
-      // Envoyer des SMS d'urgence (simulation)
-      print('📱 SMS d\'urgence envoyé aux contacts');
-      print('📍 Position: ${position.latitude}, ${position.longitude}');
-      print('🆔 ID Alerte: $alertId');
+      // Utiliser le service de notification Supabase
+      await NotificationService.instance.notifyEmergencyContacts(
+        alertId: alertId,
+        latitude: position.latitude,
+        longitude: position.longitude,
+        customMessage: customMessage,
+      );
       
-      print('✅ Contacts d\'urgence notifiés');
+      print('✅ Contacts d\'urgence notifiés localement');
     } catch (e) {
       print('❌ Erreur lors de la notification des contacts: $e');
     }
@@ -1543,14 +1576,14 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
             Expanded(
               child: Text(
                 '🚨 ALERTE CRÉÉE ! ID: ${alertId.substring(0, 8)}...\n'
-                'Vous avez 15 secondes pour annuler avec le code secret',
+                'Vous avez 3 secondes pour annuler avec le code secret',
                 style: const TextStyle(fontSize: 14),
               ),
             ),
           ],
         ),
         backgroundColor: Colors.green,
-        duration: const Duration(seconds: 30),
+        duration: const Duration(seconds: 5),
         action: SnackBarAction(
           label: 'ANNULER',
           textColor: Colors.white,
@@ -1566,7 +1599,7 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
 
   /// Démarre le compte à rebours pour l'annulation
   void _startCancelCountdown(String alertId) {
-    Timer(const Duration(seconds: 15), () {
+    Timer(const Duration(seconds: 3), () {
       if (mounted) {
         // Le compte à rebours est terminé - l'utilisateur est déjà sur l'écran d'alerte
         print('⏰ Compte à rebours d\'annulation terminé pour l\'alerte: $alertId');
@@ -1675,6 +1708,10 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
       // Marquer l'alerte comme annulée
       await AlertService.instance.cancelEmergencyAlert(alertId);
 
+      // Retirer notifications persistantes
+      await LocalPushService.instance.cancel(1001);
+      await LocalPushService.instance.cancel(1002);
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -1743,34 +1780,44 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
           ),
         ],
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _buildFooterButton(
-            icon: Icons.home,
-            label: 'Accueil',
-            index: 0,
-            onTap: () => _navigateToHome(),
-          ),
-          _buildFooterButton(
-            icon: Icons.contacts,
-            label: 'Contact',
-            index: 1,
-            onTap: () => _navigateToContacts(),
-          ),
-          _buildFooterButton(
-            icon: Icons.forum,
-            label: 'Forum',
-            index: 2,
-            onTap: () => _navigateToForum(),
-          ),
-          _buildFooterButton(
-            icon: Icons.menu,
-            label: 'Menu',
-            index: 3,
-            onTap: () => _showMenuModal(),
-          ),
-        ],
+      child: SafeArea(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            Expanded(
+              child: _buildFooterButton(
+                icon: Icons.home,
+                label: 'Accueil',
+                index: 0,
+                onTap: () => _navigateToHome(),
+              ),
+            ),
+            Expanded(
+              child: _buildFooterButton(
+                icon: Icons.contacts,
+                label: 'Contact',
+                index: 1,
+                onTap: () => _navigateToContacts(),
+              ),
+            ),
+            Expanded(
+              child: _buildFooterButton(
+                icon: Icons.forum,
+                label: 'Forum',
+                index: 2,
+                onTap: () => _navigateToForum(),
+              ),
+            ),
+            Expanded(
+              child: _buildFooterButton(
+                icon: Icons.menu,
+                label: 'Menu',
+                index: 3,
+                onTap: () => _showMenuModal(),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -384,13 +384,11 @@ class SupabaseService {
       
       // Test 3: Vérifier la structure de la table utilisateurs
       try {
-        final structureResponse = await client.rpc('get_table_info', params: {'table_name': 'utilisateurs'});
-        print('✅ Structure de la table récupérée: $structureResponse');
-      } catch (e) {
-        print('⚠️ Impossible de récupérer la structure de la table: $e');
         // Test alternatif: essayer de récupérer quelques colonnes
         final columnsResponse = await client.from('utilisateurs').select('id, pseudo, type_utilisateur').limit(1);
         print('✅ Colonnes de base accessibles: $columnsResponse');
+      } catch (e) {
+        print('⚠️ Impossible d\'accéder à la table utilisateurs: $e');
       }
       
       return {

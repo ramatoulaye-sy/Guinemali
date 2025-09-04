@@ -17,9 +17,11 @@ import '../../protected_person/screens/victim_history_screen.dart';
 import '../../protected_person/screens/victim_settings_screen.dart';
 import '../../protected_person/screens/victim_help_screen.dart';
 import '../../protected_person/screens/victim_profile_screen.dart';
-import '../../protected_person/screens/victim_menu_screen.dart';
 import '../../protected_person/screens/victim_forum_screen.dart';
 import '../../protected_person/screens/victim_map_screen.dart';
+import '../../protected_person/screens/permissions_page.dart';
+import '../../protected_person/screens/victim_security_screen.dart';
+import '../test_rpc_functions.dart';
 
 /// Configuration centralisée du routeur de l'application
 class AppRouter {
@@ -114,6 +116,13 @@ class AppRouter {
         builder: (context, state) => const RegisterScreen(),
       ),
 
+      // Route de test RPC (temporaire)
+      GoRoute(
+        path: '/test-rpc',
+        name: 'test_rpc',
+        builder: (context, state) => const TestRPCWidget(),
+      ),
+
       // Routes des victimes
       GoRoute(
         path: AppConstants.routeVictimHome,
@@ -200,9 +209,22 @@ class AppRouter {
       
       // Route de la carte GPS temps réel (OSM)
       GoRoute(
-        path: '/victim/map',
-        name: 'victim_map',
+        path: AppConstants.routeVictimLiveMap,
+        name: 'victim_live_map',
         builder: (context, state) => const VictimMapScreen(),
+      ),
+      // Route de la page d'autorisations
+      GoRoute(
+        path: AppConstants.routePermissions,
+        name: 'permissions',
+        builder: (context, state) => const PermissionsPage(),
+      ),
+      
+      // Route de l'écran de sécurité et confidentialité
+      GoRoute(
+        path: AppConstants.routeVictimSecurity,
+        name: 'victim_security',
+        builder: (context, state) => const VictimSecurityScreen(),
       ),
       
       // Route de l'écran d'enregistrement des preuves

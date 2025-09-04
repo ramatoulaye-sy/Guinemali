@@ -5,6 +5,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:guinemali/core/services/storage_service.dart';
 import 'package:guinemali/core/services/emergency_contact_service.dart';
 import 'package:guinemali/core/services/geolocation_service.dart';
+import 'package:guinemali/core/services/local_alert_service.dart';
+import 'package:guinemali/core/services/local_notification_service.dart';
 import 'package:guinemali/core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
 
@@ -34,20 +36,101 @@ class _VictimEmergencyPlanScreenState extends State<VictimEmergencyPlanScreen> {
   }
 
   // === Actions rapides (réutilisent la logique existante du panneau Actions Rapides) ===
-  void _navigateToSOS(BuildContext context) {
+  void _navigateToSOS(BuildContext context) async {
     HapticFeedback.heavyImpact();
-    // Aller à l'écran principal où se trouve le bouton SOS
-    if (mounted) {
-      context.go(AppConstants.routeVictimDashboard);
-      // Message clair pour guider l'utilisateur
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('🚨 Appuyez sur le bouton SOS rouge pour déclencher une alerte d\'urgence'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 4),
-        ),
+    
+    // Demander confirmation
+    final confirmed = await _showEmergencyConfirmation();
+    if (!confirmed) return;
+    
+    try {
+      // Obtenir la position actuelle
+      final position = await GeolocationService.instance.getCurrentPosition();
+      
+      // Créer l'alerte d'urgence locale
+      final alertId = await LocalAlertService.instance.createEmergencyAlert(
+        latitude: position.latitude,
+        longitude: position.longitude,
+        type: 'urgence',
+        dangerLevel: 5,
+        description: 'Alerte SOS déclenchée depuis le plan d\'urgence',
       );
+      
+      // Notifier les contacts d'urgence
+      final customMessage = _smsTemplateController.text.isNotEmpty 
+          ? _smsTemplateController.text 
+          : null;
+      
+      await LocalNotificationService.instance.notifyEmergencyContacts(
+        alertId: alertId,
+        latitude: position.latitude,
+        longitude: position.longitude,
+        customMessage: customMessage,
+      );
+      
+      // Rediriger vers l'écran d'alerte active
+      if (mounted) {
+        context.go(AppConstants.routeVictimActiveAlert);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🚨 Alerte d\'urgence déclenchée !'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors du déclenchement de l\'alerte: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
+  }
+
+  /// Affiche une confirmation pour déclencher l'alerte d'urgence
+  Future<bool> _showEmergencyConfirmation() async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Text(
+          '🚨 Alerte d\'Urgence',
+          style: TextStyle(
+            color: Colors.red,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: const Text(
+          'Êtes-vous sûr de vouloir déclencher une alerte d\'urgence ?\n\n'
+          'Cela va :\n'
+          '• Envoyer votre position GPS\n'
+          '• Notifier vos contacts d\'urgence\n'
+          '• Démarrer l\'enregistrement automatique',
+          style: TextStyle(color: Colors.black),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text(
+              'Annuler',
+              style: TextStyle(color: Colors.grey),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Déclencher l\'Alerte'),
+          ),
+        ],
+      ),
+    ) ?? false;
   }
 
   Future<void> _startEmergencyCallSequence(BuildContext context) async {

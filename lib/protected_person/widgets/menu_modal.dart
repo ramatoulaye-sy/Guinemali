@@ -46,9 +46,13 @@ class _MenuModalState extends State<MenuModal> {
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+      child: SingleChildScrollView(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom + 12,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
           // Barre de titre
           Container(
             padding: const EdgeInsets.all(16),
@@ -137,6 +141,24 @@ class _MenuModalState extends State<MenuModal> {
                   ],
                 ),
 
+                const SizedBox(height: 16),
+
+                // Troisième ligne de boutons
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildMenuButton(
+                        icon: Icons.history,
+                        label: 'Historique',
+                        color: AppTheme.successColor,
+                        onTap: _openHistory,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    const Expanded(child: SizedBox()),
+                  ],
+                ),
+
                 const SizedBox(height: 24),
 
                 // Plan d'urgence (toujours visible)
@@ -150,6 +172,7 @@ class _MenuModalState extends State<MenuModal> {
             ),
           ),
         ],
+      ),
       ),
     );
   }
@@ -349,9 +372,22 @@ class _MenuModalState extends State<MenuModal> {
 
   // Actions des boutons
   void _openSettings() {
+    print('🔧 Tentative d\'ouverture des paramètres...');
     HapticFeedback.lightImpact();
     Navigator.of(context).pop();
-    context.push(AppConstants.routeVictimSettings);
+    print('🔧 Navigation vers: ${AppConstants.routeVictimSettings}');
+    try {
+      context.push(AppConstants.routeVictimSettings);
+      print('✅ Navigation vers paramètres réussie');
+    } catch (e) {
+      print('❌ Erreur navigation paramètres: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erreur navigation paramètres: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   void _openEvidence() {
@@ -363,13 +399,19 @@ class _MenuModalState extends State<MenuModal> {
   void _openSecurity() {
     HapticFeedback.lightImpact();
     Navigator.of(context).pop();
-    context.push(AppConstants.routeVictimEmergencyPlan);
+    context.push(AppConstants.routeVictimSecurity);
   }
 
   void _openPermissions() {
     HapticFeedback.lightImpact();
     Navigator.of(context).pop();
-    context.push(AppConstants.routeVictimSettings);
+    context.push(AppConstants.routePermissions);
+  }
+
+  void _openHistory() {
+    HapticFeedback.lightImpact();
+    Navigator.of(context).pop();
+    context.push(AppConstants.routeVictimHistory);
   }
 
   void _openEmergencyPlan() {
