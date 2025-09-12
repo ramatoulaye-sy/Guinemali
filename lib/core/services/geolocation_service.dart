@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../constants/app_constants.dart';
@@ -5,7 +6,6 @@ import 'storage_service.dart';
 import 'sync_service.dart';
 import 'supabase_service.dart';
 import 'package:uuid/uuid.dart';
-import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 /// Service de géolocalisation pour obtenir la position de l'utilisateur
@@ -15,7 +15,7 @@ class GeolocationService {
   
   GeolocationService._();
   final _uuid = const Uuid();
-  StreamSubscription<Position>? _trackingSubscription;
+  // StreamSubscription<Position>? _trackingSubscription;
   // Notifier: indique si un suivi (stream) est actif
   final ValueNotifier<bool> isTracking = ValueNotifier(false);
 
@@ -144,10 +144,10 @@ class GeolocationService {
 
   /// Démarre l'enregistrement de positions locales associées à une alerte
   Stream<Position> startBackgroundTracking(String alertId) {
-    // Annuler l'ancien tracking si présent
-    _trackingSubscription?.cancel();
     final stream = watchPosition(accuracy: LocationAccuracy.high, distanceFilter: 15);
-    _trackingSubscription = stream.listen((pos) async {
+    
+    // Écouter le stream pour sauvegarder les positions
+    stream.listen((pos) async {
       try {
         final locationId = _uuid.v4();
         await StorageService.instance.saveLocation(
@@ -197,14 +197,15 @@ class GeolocationService {
         }
       }
     });
+    
     isTracking.value = true;
     return stream;
   }
 
   /// Arrête le tracking en arrière-plan
   Future<void> stopBackgroundTracking() async {
-    await _trackingSubscription?.cancel();
-    _trackingSubscription = null;
+    // await _trackingSubscription?.cancel();
+    // _trackingSubscription = null;
     isTracking.value = false;
     if (AppConstants.enableLogging) {
       print('🛑 Tracking GPS arrêté');

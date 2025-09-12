@@ -48,8 +48,12 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSettings();
-    _loadAppVersion();
+    // Différer toute utilisation de context/Inherited jusqu'après initState
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _loadSettings();
+      _loadAppVersion();
+    });
   }
 
   void _openAppLockDialog(BuildContext context) async {

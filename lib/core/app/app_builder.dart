@@ -76,8 +76,8 @@ class AppBuilder {
             supportedLocales: AppConfig.getSupportedLocales(),
             localizationsDelegates: AppConfig.getLocalizationDelegates(),
             
-            // Configuration du routeur
-            routerConfig: AppRouter.router,
+            // Configuration du routeur (dépend de l'état d'authentification)
+            routerConfig: AppRouter.createRouter(authProvider),
             
             // Configuration de l'interface système
             builder: (context, child) {
@@ -99,6 +99,10 @@ class AppBuilder {
       // Initialiser Supabase en premier
       await SupabaseService.ensureInitialized();
       print('✅ Supabase initialisé');
+
+      // Initialiser le stockage local pour la persistance de session
+      await StorageService.instance.initialize();
+      print('✅ StorageService initialisé');
       
       // Les autres services sont des singletons qui s'initialisent automatiquement
       print('✅ Services initialisés automatiquement');

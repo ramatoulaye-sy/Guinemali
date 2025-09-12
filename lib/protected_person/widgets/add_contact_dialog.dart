@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/models/contact_model.dart';
 
@@ -54,16 +55,68 @@ class _AddContactDialogState extends State<AddContactDialog> {
     }
   }
 
+  Future<void> _selectFromContacts() async {
+    try {
+      final granted = await FlutterContacts.requestPermission(readonly: true);
+      if (!granted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Permission d'accès aux contacts refusée"),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Ouvrir le sélecteur natif (Android). Sur iOS, fallback à la liste interne.
+      Contact? picked;
+      try {
+        picked = await FlutterContacts.openExternalPick();
+      } catch (_) {
+        picked = null;
+      }
+
+      if (picked == null) {
+        // Fallback: prendre le premier contact si pas de picker dispo
+        final contacts = await FlutterContacts.getContacts(withProperties: true);
+        if (contacts.isEmpty) return;
+        picked = contacts.first;
+      }
+
+      if (picked != null && mounted) {
+        final displayName = picked.displayName;
+        final phone = picked.phones.isNotEmpty ? (picked.phones.first.normalizedNumber ?? picked.phones.first.number) : '';
+        setState(() {
+          _nameController.text = displayName;
+          _phoneController.text = phone;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors de la sélection du contact: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Dialog(
+      backgroundColor: AppConstants.whiteColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
       ),
       child: Container(
+        color: AppConstants.whiteColor,
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.8,
-          maxWidth: MediaQuery.of(context).size.width * 0.9,
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+          maxWidth: MediaQuery.of(context).size.width * 0.95,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -278,32 +331,50 @@ class _AddContactDialogState extends State<AddContactDialog> {
               ),
             ],
           ),
-          child: TextFormField(
-            controller: _phoneController,
-            style: TextStyle(
-              fontSize: 16,
-              color: AppConstants.blackColor,
-            ),
-            decoration: InputDecoration(
-              hintText: '+224 XXX XX XX XX',
-              hintStyle: TextStyle(
-                color: AppConstants.blackColor.withOpacity(0.5),
-                fontSize: 16,
+          child: Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _phoneController,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: AppConstants.blackColor,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: '+224 XXX XX XX XX',
+                    hintStyle: TextStyle(
+                      color: AppConstants.blackColor.withOpacity(0.5),
+                      fontSize: 16,
+                    ),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.all(16),
+                  ),
+                  keyboardType: TextInputType.phone,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Le numéro de téléphone est requis';
+                    }
+                    final cleanNumber = value.replaceAll(RegExp(r'[^\d+]'), '');
+                    if (cleanNumber.length < 8) {
+                      return 'Numéro de téléphone invalide';
+                    }
+                    return null;
+                  },
+                ),
               ),
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.all(16),
-            ),
-            keyboardType: TextInputType.phone,
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Le numéro de téléphone est requis';
-              }
-              final cleanNumber = value.replaceAll(RegExp(r'[^\d+]'), '');
-              if (cleanNumber.length < 8) {
-                return 'Numéro de téléphone invalide';
-              }
-              return null;
-            },
+              Container(
+                margin: const EdgeInsets.only(right: 8),
+                child: IconButton(
+                  onPressed: _selectFromContacts,
+                  icon: Icon(
+                    Icons.contacts,
+                    color: AppConstants.primaryColor,
+                    size: 24,
+                  ),
+                  tooltip: 'Sélectionner depuis le répertoire',
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -359,10 +430,17 @@ class _AddContactDialogState extends State<AddContactDialog> {
               border: InputBorder.none,
               contentPadding: const EdgeInsets.all(16),
             ),
+            dropdownColor: AppConstants.whiteColor,
             items: _relations.map((relation) {
               return DropdownMenuItem(
                 value: relation,
-                child: Text(relation),
+                child: Text(
+                  relation,
+                  style: TextStyle(
+                    color: AppConstants.blackColor,
+                    fontSize: 16,
+                  ),
+                ),
               );
             }).toList(),
             onChanged: (value) {

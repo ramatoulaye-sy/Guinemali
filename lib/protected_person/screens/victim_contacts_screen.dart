@@ -7,7 +7,6 @@ import '../../core/services/supabase_service.dart';
 import '../../core/services/storage_service.dart';
 import '../../core/theme/app_theme.dart';
 import 'package:uuid/uuid.dart';
-import '../widgets/contact_card.dart';
 import '../widgets/add_contact_dialog.dart';
 
 /// Écran de gestion des contacts d'urgence avec design professionnel
@@ -117,8 +116,11 @@ class _VictimContactsScreenState extends State<VictimContactsScreen> {
       
       if (userId == null) return;
 
+      // Garantir des identifiants valides
+      final String contactId = (contact.id.isEmpty) ? _uuid.v4() : contact.id;
+
       final contactData = {
-        'id': contact.id,
+        'id': contactId,
         'utilisateur_id': userId,
         'nom': contact.nom,
         'numero_telephone': contact.numeroTelephone,
@@ -132,7 +134,7 @@ class _VictimContactsScreenState extends State<VictimContactsScreen> {
       
       // Sauvegarder en cache local
       await StorageService.instance.saveCachedContact(
-        id: contactData['id'] as String,
+        id: contactId,
         userId: userId,
         name: contactData['nom'] as String,
         phoneNumber: contactData['numero_telephone'] as String,
@@ -234,7 +236,7 @@ class _VictimContactsScreenState extends State<VictimContactsScreen> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
+              color: Colors.white.withOpacity(0.2),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(Icons.contacts, size: 24),
@@ -258,10 +260,10 @@ class _VictimContactsScreenState extends State<VictimContactsScreen> {
           margin: const EdgeInsets.only(right: 16),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: AppTheme.secondaryColor.withValues(alpha: 0.2),
+            color: AppTheme.secondaryColor.withOpacity(0.2),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: AppTheme.secondaryColor.withValues(alpha: 0.3),
+              color: AppTheme.secondaryColor.withOpacity(0.3),
               width: 1,
             ),
           ),
@@ -306,13 +308,13 @@ class _VictimContactsScreenState extends State<VictimContactsScreen> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            AppTheme.primaryColor.withValues(alpha: 0.1),
-            AppTheme.secondaryColor.withValues(alpha: 0.05),
+            AppTheme.primaryColor.withOpacity(0.1),
+            AppTheme.secondaryColor.withOpacity(0.05),
           ],
         ),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: AppTheme.primaryColor.withValues(alpha: 0.2),
+          color: AppTheme.primaryColor.withOpacity(0.2),
           width: 1,
         ),
       ),
@@ -325,7 +327,7 @@ class _VictimContactsScreenState extends State<VictimContactsScreen> {
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.primaryColor.withValues(alpha: 0.3),
+                  color: AppTheme.primaryColor.withOpacity(0.3),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
@@ -397,10 +399,10 @@ class _VictimContactsScreenState extends State<VictimContactsScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.red.withValues(alpha: 0.05),
+        color: Colors.red.withOpacity(0.05),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: Colors.red.withValues(alpha: 0.2),
+          color: Colors.red.withOpacity(0.2),
           width: 1,
         ),
       ),
@@ -451,7 +453,7 @@ class _VictimContactsScreenState extends State<VictimContactsScreen> {
             children: [
               Icon(
                 Icons.info_outline,
-                color: Colors.red.withValues(alpha: 0.7),
+                color: Colors.red.withOpacity(0.7),
                 size: 16,
               ),
               const SizedBox(width: 8),
@@ -460,7 +462,7 @@ class _VictimContactsScreenState extends State<VictimContactsScreen> {
                   'Assurez-vous que vos contacts sont joignables 24h/24',
                   style: TextStyle(
                     fontSize: 12,
-                    color: Colors.red.withValues(alpha: 0.7),
+                    color: Colors.red.withOpacity(0.7),
                     fontStyle: FontStyle.italic,
                   ),
                   overflow: TextOverflow.visible,
@@ -483,10 +485,10 @@ class _VictimContactsScreenState extends State<VictimContactsScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: color.withValues(alpha: 0.3),
+          color: color.withOpacity(0.3),
           width: 1,
         ),
       ),
@@ -523,7 +525,7 @@ class _VictimContactsScreenState extends State<VictimContactsScreen> {
                     subtitle,
                     style: TextStyle(
                       fontSize: 14,
-                      color: color.withValues(alpha: 0.7),
+                      color: color.withOpacity(0.7),
                     ),
                   ),
                 ],
@@ -544,13 +546,13 @@ class _VictimContactsScreenState extends State<VictimContactsScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withOpacity(0.05),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),
         ],
         border: Border.all(
-          color: Colors.grey.withValues(alpha: 0.1),
+          color: Colors.grey.withOpacity(0.1),
           width: 1,
         ),
       ),
@@ -560,7 +562,7 @@ class _VictimContactsScreenState extends State<VictimContactsScreen> {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: _getPriorityColor(contact.priorite).withValues(alpha: 0.1),
+              color: _getPriorityColor(contact.priorite).withOpacity(0.1),
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(16),
                 topRight: Radius.circular(16),
@@ -647,7 +649,7 @@ class _VictimContactsScreenState extends State<VictimContactsScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        contact.numeroTelephone,
+                       contact.numeroTelephone,
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -658,7 +660,7 @@ class _VictimContactsScreenState extends State<VictimContactsScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: _getPriorityColor(contact.priorite).withValues(alpha: 0.2),
+                        color: _getPriorityColor(contact.priorite).withOpacity(0.2),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
@@ -725,10 +727,10 @@ class _VictimContactsScreenState extends State<VictimContactsScreen> {
     return Container(
       padding: const EdgeInsets.all(40),
       decoration: BoxDecoration(
-        color: Colors.grey.withValues(alpha: 0.05),
+        color: Colors.grey.withOpacity(0.05),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: Colors.grey.withValues(alpha: 0.2),
+          color: Colors.grey.withOpacity(0.2),
           width: 1,
         ),
       ),
@@ -777,7 +779,7 @@ class _VictimContactsScreenState extends State<VictimContactsScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.primaryColor.withValues(alpha: 0.3),
+            color: AppTheme.primaryColor.withOpacity(0.3),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),

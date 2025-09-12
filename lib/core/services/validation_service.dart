@@ -45,8 +45,9 @@ class ValidationService {
       return 'Le pseudo ne peut pas dépasser 20 caractères';
     }
     
-    if (trimmedValue.contains(' ') || !RegExp(r'^[a-zA-Z0-9]+$').hasMatch(trimmedValue)) {
-      return 'Le pseudo ne doit contenir que des lettres et chiffres';
+    // Autoriser lettres, chiffres et underscore, interdire les espaces
+    if (trimmedValue.contains(' ') || !RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(trimmedValue)) {
+      return 'Le pseudo ne doit contenir que des lettres, chiffres et _';
     }
     
     return null;

@@ -38,6 +38,15 @@ subprojects {
     }
 }
 
+// Forcer la compilation Java en 17 pour tous les sous-projets et supprimer l'avertissement -source/-target 8
+subprojects {
+    tasks.withType<JavaCompile>().configureEach {
+        sourceCompatibility = JavaVersion.VERSION_17.toString()
+        targetCompatibility = JavaVersion.VERSION_17.toString()
+        options.compilerArgs.add("-Xlint:-options")
+    }
+}
+
 // Désactiver globalement toutes les tâches NDK
 allprojects {
     tasks.matching { 

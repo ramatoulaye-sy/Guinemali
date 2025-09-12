@@ -17,6 +17,7 @@ import '../widgets/menu_modal.dart';
 import '../../shared/screens/app_lock_screen.dart';
 import '../../core/services/security_service.dart';
 import '../../core/services/local_push_service.dart';
+import './victim_active_alert_screen.dart';
 
 /// Écran d'accueil principal avec dashboard complet
 class VictimDashboardScreen extends StatefulWidget {
@@ -1020,8 +1021,8 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
                     center: Alignment.center,
                     radius: 0.8,
                     colors: [
-                      const Color(0xFFFF6B6B), // Rouge plus clair et doux au centre
-                      const Color(0xFFFF5252), // Rouge moyen vers l'extérieur
+                      const Color.fromARGB(255, 238, 5, 5), // Rouge plus clair et doux au centre
+                      const Color.fromARGB(255, 239, 97, 97), // Rouge moyen vers l'extérieur
                     ],
                   ),
                   // Bordure subtile avec couleur primaire
@@ -1130,7 +1131,47 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
     final confirmed = await _showEmergencyConfirmation();
     if (!confirmed) return;
 
+    // Navigation immédiate vers l'écran d'alerte active (avant tout traitement)
     try {
+      // Fermer tout éventuel dialog restant
+      try {
+        final rootNav = Navigator.of(context, rootNavigator: true);
+        int safetyPops = 0;
+        while (rootNav.canPop() && safetyPops < 3) {
+          rootNav.pop();
+          safetyPops++;
+        }
+      } catch (_) {}
+      // Forcer la navigation immédiate
+      try {
+        Navigator.of(context, rootNavigator: true).pushReplacement(
+          MaterialPageRoute(builder: (_) => const VictimActiveAlertScreen()),
+        );
+      } catch (_) {
+        try { context.goNamed('victim_active_alert'); } catch (_) {
+          try { context.go(AppConstants.routeVictimActiveAlert); } catch (_) {}
+        }
+      }
+    } catch (_) {}
+
+    try {
+      // Rafraîchir l'utilisateur et vérifier la session
+      try {
+        await context.read<AuthProvider>().refreshUser();
+      } catch (_) {}
+      final currentUser = context.read<AuthProvider>().currentUser;
+      if (currentUser == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('❌ Utilisateur non connecté. Veuillez vous reconnecter.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
       // 2. Afficher le message de chargement
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1175,9 +1216,7 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
           title: 'Alerte active',
           body: 'Votre alerte est en cours. Appuyez pour revenir à l\'app.',
         );
-        
-        // 10. Rediriger immédiatement vers l'écran d'alerte active
-        context.push(AppConstants.routeVictimActiveAlert);
+        // Navigation déjà effectuée
       }
       
       print('🚨 URGENCE DÉCLENCHÉE ! Alerte créée: $alertId');
@@ -1372,58 +1411,14 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
             ),
           ),
           
-          // Bouton de confirmation avec design d'urgence professionnel
-          Expanded(
-            child: Container(
-              height: 48,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.red[600]!,
-                    Colors.red[700]!,
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.red.withValues(alpha: 0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () => Navigator.of(context).pop(true),
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.emergency,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'CONFIRMER L\'URGENCE',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+          // Bouton de confirmation avec design d'urgence (sans Expanded pour éviter ParentDataWidget)
+          ElevatedButton.icon(
+            onPressed: () => Navigator.of(context).pop(true),
+            icon: const Icon(Icons.emergency, color: Colors.white, size: 20),
+            label: const Text('CONFIRMER L\'URGENCE'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red[700],
+              foregroundColor: Colors.white,
             ),
           ),
         ],
