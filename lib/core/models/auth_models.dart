@@ -2,18 +2,18 @@ import 'user_model.dart';
 
 /// Modèle de données pour la connexion
 class LoginData {
-  final String prenom;
+  final String pseudo;
   final String pin;
 
   const LoginData({
-    required this.prenom,
+    required this.pseudo,
     required this.pin,
   });
 
   /// Convertit en JSON
   Map<String, dynamic> toJson() {
     return {
-      'prenom': prenom,
+      'pseudo': pseudo,
       'pin': pin,
     };
   }
@@ -22,8 +22,8 @@ class LoginData {
   List<String> validate() {
     List<String> errors = [];
 
-    if (prenom.trim().isEmpty) {
-      errors.add('Le prénom est requis');
+    if (pseudo.trim().isEmpty) {
+      errors.add('Le pseudo est requis');
     }
 
     if (pin.trim().isEmpty) {

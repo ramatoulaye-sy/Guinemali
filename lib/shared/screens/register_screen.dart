@@ -892,7 +892,7 @@ class _RegisterScreenState extends State<RegisterScreen>
             CheckboxListTile(
               value: _acceptTerms,
               onChanged: (value) {
-                print('📋 Conditions changées: $value');
+                // Conditions changées: $value
                 setState(() => _acceptTerms = value!);
               },
               title: const Text(
@@ -990,8 +990,8 @@ class _RegisterScreenState extends State<RegisterScreen>
           height: 50,
           child: ElevatedButton.icon(
             onPressed: canRegister ? () {
-              print('🖱️ Bouton d\'inscription cliqué !');
-              print('📊 État: isLoading=$_isLoading, acceptTerms=$_acceptTerms');
+                  // Bouton d'inscription cliqué
+    // État: isLoading=$_isLoading, acceptTerms=$_acceptTerms
               _handleRegister();
             } : null,
             icon: _isLoading
@@ -1228,8 +1228,8 @@ class _RegisterScreenState extends State<RegisterScreen>
 
   /// Gère l'inscription
   Future<void> _handleRegister() async {
-    print('🚀 === DÉBUT DE L\'INSCRIPTION ===');
-    print('📱 État du bouton: isLoading=$_isLoading, acceptTerms=$_acceptTerms');
+    // === DÉBUT DE L'INSCRIPTION ===
+    // État du bouton: isLoading=$_isLoading, acceptTerms=$_acceptTerms
     
     setState(() {
       _errorMessage = null;
@@ -1238,23 +1238,23 @@ class _RegisterScreenState extends State<RegisterScreen>
     });
 
     try {
-      print('🔄 Début de l\'inscription...');
-      print('📝 Données saisies:');
-              print('   - Prénom: "${_prenomController.text.trim()}"');
-      print('   - PIN: "${_pinController.text.trim()}"');
-      print('   - Confirmation PIN: "${_confirmPinController.text.trim()}"');
-      print('   - Téléphone: "${_phoneController.text.trim()}"');
-      print('   - Région: "$_selectedRegion"');
-      print('   - Langue: "$_selectedLanguage"');
-      print('   - Type utilisateur: ${_selectedUserType.displayName}');
+          // Début de l'inscription...
+    // Données saisies:
+    //   - Prénom: "${_prenomController.text.trim()}"
+    //   - PIN: "${_pinController.text.trim()}"
+    //   - Confirmation PIN: "${_confirmPinController.text.trim()}"
+    //   - Téléphone: "${_phoneController.text.trim()}"
+    //   - Région: "$_selectedRegion"
+    //   - Langue: "$_selectedLanguage"
+    //   - Type utilisateur: ${_selectedUserType.displayName}
       
       // Test de connexion Supabase
       
-      print('🔌 Test de connexion Supabase...');
+      // Test de connexion Supabase...
       try {
         await SupabaseService.ensureInitialized();
         final supabase = SupabaseService.instance;
-        print('✅ Instance Supabase récupérée');
+        // Instance Supabase récupérée
         
         // Test simple de connexion (via le service pour garantir l'init)
         final response = await supabase.select(
@@ -1262,21 +1262,21 @@ class _RegisterScreenState extends State<RegisterScreen>
           columns: 'count',
           limit: 1,
         );
-        print('✅ Connexion Supabase réussie: $response');
+        // Connexion Supabase réussie: $response
       } catch (e) {
-        print('❌ Erreur de connexion Supabase: $e');
+        // Erreur de connexion Supabase: $e
         throw Exception('Impossible de se connecter à la base de données: $e');
       }
       
       
       
-      print('✅ Service d\'authentification récupéré');
+      // Service d'authentification récupéré
       
       // Vérifier si le pseudo est disponible (déjà fait dans l'étape précédente)
       if (!_pseudoValidated) {
         throw Exception('Le pseudo doit être validé avant de continuer');
       }
-      print('✅ Pseudo validé: ${_pseudoController.text.trim()}');
+      // Pseudo validé: ${_pseudoController.text.trim()}
 
       
              final registrationData = RegistrationData(
@@ -1289,10 +1289,10 @@ class _RegisterScreenState extends State<RegisterScreen>
          typeUtilisateur: _selectedUserType,
        );
       
-      print('📝 Données d\'inscription préparées: ${registrationData.toJson()}');
+      // Données d'inscription préparées: ${registrationData.toJson()}
 
       
-      print('🚀 Appel du service d\'inscription...');
+      // Appel du service d'inscription...
       try {
         // Utiliser l'AuthProvider au lieu du service direct
         final success = await context.read<AuthProvider>().register(
@@ -1309,9 +1309,9 @@ class _RegisterScreenState extends State<RegisterScreen>
           // Récupérer l'utilisateur depuis l'AuthProvider
           final user = context.read<AuthProvider>().currentUser;
           if (user != null) {
-            print('✅ Inscription réussie: ${user.prenom}');
-            print('🔍 Type utilisateur: ${user.typeUtilisateur.value}');
-            print('🔍 Route de redirection: ${_getRouteForUserType(user.typeUtilisateur)}');
+                // Inscription réussie: ${user.prenom}
+    // Type utilisateur: ${user.typeUtilisateur.value}
+    // Route de redirection: ${_getRouteForUserType(user.typeUtilisateur)}
              
             if (mounted) {
               // Afficher un message de succès
@@ -1323,7 +1323,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                 ),
               );
 
-              print('🔄 Redirection vers l\'écran approprié...');
+              // Redirection vers l'écran approprié...
               // Attendre un peu pour que le SnackBar soit visible
               await Future.delayed(const Duration(seconds: 2));
               
@@ -1337,14 +1337,14 @@ class _RegisterScreenState extends State<RegisterScreen>
           throw Exception('Échec de l\'inscription');
         }
       } catch (e) {
-        print('❌ Erreur lors de l\'inscription via AuthProvider: $e');
+        // Erreur lors de l'inscription via AuthProvider: $e
         throw Exception('Erreur lors de l\'inscription: $e');
       }
       
     } catch (e, stackTrace) {
-      print('❌ === ERREUR LORS DE L\'INSCRIPTION ===');
-      print('❌ Erreur: $e');
-      print('📚 Stack trace: $stackTrace');
+          // === ERREUR LORS DE L'INSCRIPTION ===
+    // Erreur: $e
+    // Stack trace: $stackTrace
       
       if (mounted) {
         setState(() {
@@ -1365,7 +1365,7 @@ class _RegisterScreenState extends State<RegisterScreen>
         );
       }
     } finally {
-      print('🏁 === FIN DE L\'INSCRIPTION ===');
+      // === FIN DE L'INSCRIPTION ===
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -1377,27 +1377,22 @@ class _RegisterScreenState extends State<RegisterScreen>
 
   /// Redirige vers l'écran approprié selon le type d'utilisateur
   void _redirectToUserScreen(UserType userType) {
-    print('🔄 Redirection pour type: ${userType.value}');
-    // Attendre un peu pour que l'état d'authentification soit mis à jour
+         // Attendre un peu pour que l'état d'authentification soit mis à jour
     Future.delayed(const Duration(milliseconds: 100), () {
       if (mounted) {
         switch (userType) {
-          case UserType.victime:
-            print('🎯 Redirection vers: ${AppConstants.routeVictimHome}');
-            context.go(AppConstants.routeVictimHome);
-            break;
-          case UserType.aidant:
-            print('🎯 Redirection vers: ${AppConstants.routeHelperHome}');
-            context.go(AppConstants.routeHelperHome);
-            break;
-          case UserType.ong:
-            print('🎯 Redirection vers: ${AppConstants.routeONGHome}');
-            context.go(AppConstants.routeONGHome);
-            break;
-          case UserType.admin:
-            print('🎯 Redirection vers: ${AppConstants.routeAdminHome}');
-            context.go(AppConstants.routeAdminHome);
-            break;
+                     case UserType.victime:
+             context.go(AppConstants.routeVictimDashboard);
+             break;
+           case UserType.aidant:
+             context.go(AppConstants.routeHelperHome);
+             break;
+           case UserType.ong:
+             context.go(AppConstants.routeONGHome);
+             break;
+           case UserType.admin:
+             context.go(AppConstants.routeAdminHome);
+             break;
         }
       }
     });
@@ -1407,7 +1402,7 @@ class _RegisterScreenState extends State<RegisterScreen>
   String _getRouteForUserType(UserType userType) {
     switch (userType) {
       case UserType.victime:
-        return AppConstants.routeVictimHome;
+        return AppConstants.routeVictimDashboard;
       case UserType.aidant:
         return AppConstants.routeHelperHome;
       case UserType.ong:

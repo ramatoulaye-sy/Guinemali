@@ -3,7 +3,6 @@ import '../models/user_model.dart';
 import '../models/auth_models.dart';
 import '../services/auth_service.dart';
 import '../constants/app_constants.dart';
-import '../services/supabase_service.dart';
 
 /// Provider pour la gestion de l'état d'authentification
 class AuthProvider extends ChangeNotifier {
@@ -31,35 +30,17 @@ class AuthProvider extends ChangeNotifier {
     try {
       await _authService.initialize();
       
-      // TEMPORAIREMENT - Créer un utilisateur fictif pour contourner les problèmes Supabase
-      if (_currentUser == null) {
-        _currentUser = UserModel(
-          id: 'temp_user_id',
-          prenom: 'Utilisateur Test',
-          pseudo: 'test_user',
-          typeUtilisateur: UserType.victime,
-          dateCreation: DateTime.now(),
-        );
-        print('🔧 Utilisateur temporaire créé: ${_currentUser!.prenom}');
-      }
+      // Charger l'utilisateur depuis le service d'authentification
+      _currentUser = _authService.currentUser;
       
       if (AppConstants.enableLogging) {
-        print('🔧 AuthProvider initialisé - Utilisateur: ${_currentUser?.prenom ?? 'Aucun'}');
+        print('✅ AuthProvider initialisé - Utilisateur: ${_currentUser?.prenom ?? 'Aucun'}');
       }
     } catch (e) {
-      // TEMPORAIREMENT - Créer un utilisateur fictif même en cas d'erreur
-      _currentUser = UserModel(
-        id: 'temp_user_id',
-        prenom: 'Utilisateur Test',
-        pseudo: 'test_user',
-        typeUtilisateur: UserType.victime,
-        dateCreation: DateTime.now(),
-      );
-      print('🔧 Utilisateur temporaire créé après erreur: ${_currentUser!.prenom}');
-      
       if (AppConstants.enableLogging) {
         print('❌ Erreur initialisation AuthProvider: $e');
       }
+      _setError('Erreur d\'initialisation: $e');
     } finally {
       _setLoading(false);
       notifyListeners();
@@ -103,12 +84,12 @@ class AuthProvider extends ChangeNotifier {
 
   /// Connecte un utilisateur
   Future<bool> login({
-    required String prenom,
+    required String pseudo,
     required String pin,
   }) async {
     _setLoading(true);
     try {
-      final loginData = LoginData(prenom: prenom, pin: pin);
+      final loginData = LoginData(pseudo: pseudo, pin: pin);
       final user = await _authService.login(loginData);
       
       _currentUser = user;
@@ -204,21 +185,16 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Vérifie la disponibilité d'un prénom
-  Future<bool> checkPrenomAvailability(String prenom) async {
-    try {
-      return await _authService.isPrenomAvailable(prenom);
-    } catch (e) {
-      _setError('Erreur de vérification: $e');
-      return false;
-    }
-  }
-
   /// Vérifie la disponibilité d'un pseudo
   Future<Map<String, dynamic>> checkPseudoAvailability(String pseudo) async {
     try {
-      final supabase = SupabaseService.instance;
-      return await supabase.checkPseudoAvailability(pseudo);
+      final isAvailable = await _authService.isPseudoAvailable(pseudo);
+      return {
+        'available': isAvailable,
+        'message': isAvailable ? 'Pseudo disponible' : 'Pseudo déjà utilisé',
+        'suggestions': isAvailable ? [] : ['${pseudo}_1', '${pseudo}_2', '${pseudo}_3'],
+        'status': 'success',
+      };
     } catch (e) {
       _setError('Erreur de vérification du pseudo: $e');
       return {

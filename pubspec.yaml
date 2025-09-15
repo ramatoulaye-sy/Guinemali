@@ -35,7 +35,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   
   # Supabase pour backend
-  supabase_flutter: ^2.8.0
+  supabase_flutter: ^2.10.0
   
   # Gestion d'état
   provider: ^6.1.2
@@ -58,9 +58,9 @@ dependencies:
   camera: ^0.10.5+9  # Version plus ancienne et compatible avec AGP 8.1.4
   audio_waveforms: ^1.1.1
   record: ^6.0.0  # Dernière version stable
-  video_player: ^2.7.2
-  chewie: ^1.7.5
-  just_audio: ^0.9.36
+  video_player: ^2.10.0
+  chewie: ^1.12.1
+  just_audio: ^0.10.4
   
   # Stockage et fichiers
   shared_preferences: ^2.3.3
@@ -72,6 +72,9 @@ dependencies:
   # Cryptographie et sécurité
   crypto: ^3.0.6
   encrypt: ^5.0.3
+
+  local_auth: ^2.1.8
+  flutter_secure_storage: ^9.2.2
   
   # Interface utilisateur
   flutter_animate: ^4.5.0
@@ -83,11 +86,20 @@ dependencies:
   # Utiliser url_launcher pour les SMS et appels (plus simple et compatible)
   url_launcher: ^6.3.2
   
+  # Cartographie (OpenStreetMap, sans clé API)
+  flutter_map: ^6.1.0
+  latlong2: ^0.9.0
+  
   # Utilitaires
   intl: ^0.20.2
   uuid: ^4.5.1
+  image_picker: ^1.0.7
+  package_info_plus: ^8.0.2
   flutter_localizations:
     sdk: flutter
+  audio_session: ^0.2.2
+  pdf: ^3.11.3
+  printing: ^5.14.2
 
 dev_dependencies:
   flutter_test:

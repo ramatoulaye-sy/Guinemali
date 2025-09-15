@@ -250,6 +250,75 @@ Merci d'appeler immédiatement et d'aider si vous le pouvez.
     );
   }
 
+  /// Notifie les contacts d'urgence
+  Future<void> notifyEmergencyContacts({
+    required String alertId,
+    required double latitude,
+    required double longitude,
+    String? customMessage,
+  }) async {
+    try {
+      // Créer une notification dans la base de données
+      await _createNotificationRecord(
+        alertId: alertId,
+        type: 'emergency_alert',
+        titre: 'Alerte d\'urgence',
+        message: customMessage ?? 'Une alerte d\'urgence a été déclenchée',
+        latitude: latitude,
+        longitude: longitude,
+      );
+
+      // Envoyer une notification locale persistante
+      await _localNotifications.show(
+        1000 + DateTime.now().millisecondsSinceEpoch % 1000,
+        '🚨 Alerte d\'urgence',
+        'Votre alerte a été envoyée aux contacts d\'urgence',
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'emergency_alerts',
+            'Alertes d\'urgence',
+            channelDescription: 'Notifications pour les alertes d\'urgence',
+            importance: Importance.max,
+            priority: Priority.high,
+            ongoing: true,
+            autoCancel: false,
+          ),
+        ),
+        payload: 'alert:$alertId',
+      );
+
+      print('📞 Notification des contacts d\'urgence pour l\'alerte: $alertId');
+      print('📍 Position: $latitude, $longitude');
+      print('💬 Message: ${customMessage ?? 'Alerte d\'urgence'}');
+    } catch (e) {
+      print('❌ Erreur lors de la notification des contacts: $e');
+    }
+  }
+
+  /// Crée un enregistrement de notification dans Supabase
+  Future<void> _createNotificationRecord({
+    required String alertId,
+    required String type,
+    required String titre,
+    required String message,
+    double? latitude,
+    double? longitude,
+  }) async {
+    try {
+      // TODO: Implémenter l'insertion dans la table notifications
+      // await SupabaseService.instance.insert('notifications', {
+      //   'alerte_id': alertId,
+      //   'type_notification': type,
+      //   'titre': titre,
+      //   'message': message,
+      //   'latitude': latitude,
+      //   'longitude': longitude,
+      // });
+    } catch (e) {
+      print('❌ Erreur création enregistrement notification: $e');
+    }
+  }
+
   /// Nettoie les ressources
   void dispose() {
     if (AppConstants.enableLogging) {

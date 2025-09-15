@@ -226,18 +226,21 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                 'Alerte\nUrgence',
                 theme,
                 delay: 1200,
+                onTap: () => _onTapEmergency(context),
               ),
               _buildFeatureIcon(
                 Icons.location_on,
                 'Géolocalisation\nTemps réel',
                 theme,
                 delay: 1400,
+                onTap: () => _onTapGeolocation(context),
               ),
               _buildFeatureIcon(
                 Icons.people,
                 'Réseau\nSolidaire',
                 theme,
                 delay: 1600,
+                onTap: () => _onTapCommunity(context),
               ),
             ],
           ),
@@ -252,8 +255,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     String label,
     ThemeData theme, {
     required int delay,
+    VoidCallback? onTap,
   }) {
-    return Column(
+    final content = Column(
       children: [
         Container(
           padding: const EdgeInsets.all(AppConstants.paddingMedium),
@@ -281,14 +285,77 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           textAlign: TextAlign.center,
         ),
       ],
-    )
-        .animate()
-        .scale(
-          begin: const Offset(0.5, 0.5),
-          duration: AppConstants.animationDurationMedium,
-          curve: Curves.elasticOut,
-        )
-        .fadeIn(delay: Duration(milliseconds: delay));
+    );
+
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: content
+          .animate()
+          .scale(
+            begin: const Offset(0.5, 0.5),
+            duration: AppConstants.animationDurationMedium,
+            curve: Curves.elasticOut,
+          )
+          .fadeIn(delay: Duration(milliseconds: delay)),
+    );
+  }
+
+  // Gestion des actions des icônes de fonctionnalités
+  void _onTapEmergency(BuildContext context) {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    if (auth.currentUser == null) {
+      _promptLogin(context, message: "Connectez-vous pour déclencher une alerte d'urgence.");
+      return;
+    }
+    // Utilisateur connecté → aller au dashboard (le bouton SOS y est disponible)
+    context.push(AppConstants.routeVictimDashboard);
+  }
+
+  void _onTapGeolocation(BuildContext context) {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    if (auth.currentUser == null) {
+      _promptLogin(context, message: 'Connectez-vous pour activer la géolocalisation en temps réel.');
+      return;
+    }
+    // Ouvrir la carte temps réel (OSM) puis message d'information
+    context.push('/victim/map');
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('GPS: ouverture de la carte en temps réel…')),
+    );
+  }
+
+  void _onTapCommunity(BuildContext context) {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    if (auth.currentUser == null) {
+      _promptLogin(context, message: 'Connectez-vous pour accéder au réseau solidaire.');
+      return;
+    }
+    // Aller directement au forum communautaire
+    context.push(AppConstants.routeVictimForum);
+  }
+
+  void _promptLogin(BuildContext context, {required String message}) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Authentification requise'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Plus tard'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              context.push(AppConstants.routeLogin);
+            },
+            child: const Text('Se connecter'),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Construit les boutons d'action
@@ -366,7 +433,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
             child: Text(
               'Besoin d\'aide ?',
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: const Color(0xFF945ACB), // Couleur primaire
+                color: AppConstants.primaryColor,
                 decoration: TextDecoration.underline,
               ),
             ),

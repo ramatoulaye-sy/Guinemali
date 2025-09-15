@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/locale_provider.dart';
+import '../providers/theme_provider.dart';
 import '../services/supabase_service.dart';
 import '../services/geolocation_service.dart';
 import '../services/alert_service.dart';
@@ -21,6 +23,16 @@ class AppBuilder {
         // Provider d'authentification
         ChangeNotifierProvider(
           create: (context) => AuthProvider()..initialize(),
+        ),
+        
+        // Provider de localisation
+        ChangeNotifierProvider(
+          create: (context) => LocaleProvider()..initialize(),
+        ),
+        
+        // Provider de thème
+        ChangeNotifierProvider(
+          create: (context) => ThemeProvider()..initialize(),
         ),
         
         // Services (singletons)
