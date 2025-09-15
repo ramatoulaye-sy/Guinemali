@@ -1,8 +1,7 @@
 import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:supabase/supabase.dart';
+import '../constants/app_constants.dart';
 import 'supabase_service.dart';
-import 'log_service.dart';
 
 /// Service pour gérer les notifications temps réel via Supabase Realtime
 class RealtimeService {
@@ -11,7 +10,6 @@ class RealtimeService {
   RealtimeService._internal();
 
   final SupabaseService _supabase = SupabaseService.instance;
-  final LogService _log = LogService.instance;
 
   // Streams pour les différents types d'événements
   final StreamController<Map<String, dynamic>> _alertController = StreamController.broadcast();
@@ -35,17 +33,15 @@ class RealtimeService {
   /// Initialise le service Realtime
   Future<void> initialize() async {
     try {
-      _log.info('🔄 Initialisation du service Realtime...');
+      print('🔄 Initialisation du service Realtime...');
       
       // Vérifier la connexion Supabase
-      if (!_supabase.isConnected) {
-        throw Exception('Supabase non connecté');
-      }
+      await _supabase.testConnection();
 
       _isConnected = true;
-      _log.success('✅ Service Realtime initialisé');
+      print('✅ Service Realtime initialisé');
     } catch (e) {
-      _log.error('❌ Erreur initialisation Realtime: $e');
+      print('❌ Erreur initialisation Realtime: $e');
       _isConnected = false;
       rethrow;
     }
@@ -54,7 +50,7 @@ class RealtimeService {
   /// Écoute les alertes en temps réel
   Future<void> listenToAlerts(String userId) async {
     try {
-      _log.info('🔔 Écoute des alertes pour utilisateur: $userId');
+      print('🔔 Écoute des alertes pour utilisateur: $userId');
 
       // Fermer le channel existant s'il existe
       await _alertChannel?.unsubscribe();
@@ -75,9 +71,9 @@ class RealtimeService {
           );
 
       await _alertChannel?.subscribe();
-      _log.success('✅ Écoute des alertes activée');
+      print('✅ Écoute des alertes activée');
     } catch (e) {
-      _log.error('❌ Erreur écoute alertes: $e');
+      print('❌ Erreur écoute alertes: $e');
       rethrow;
     }
   }
@@ -85,7 +81,7 @@ class RealtimeService {
   /// Écoute les positions GPS en temps réel
   Future<void> listenToPositions(String userId) async {
     try {
-      _log.info('📍 Écoute des positions pour utilisateur: $userId');
+      print('📍 Écoute des positions pour utilisateur: $userId');
 
       // Fermer le channel existant s'il existe
       await _positionChannel?.unsubscribe();
@@ -106,9 +102,9 @@ class RealtimeService {
           );
 
       await _positionChannel?.subscribe();
-      _log.success('✅ Écoute des positions activée');
+      print('✅ Écoute des positions activée');
     } catch (e) {
-      _log.error('❌ Erreur écoute positions: $e');
+      print('❌ Erreur écoute positions: $e');
       rethrow;
     }
   }
@@ -116,7 +112,7 @@ class RealtimeService {
   /// Écoute les notifications générales
   Future<void> listenToNotifications(String userId) async {
     try {
-      _log.info('🔔 Écoute des notifications pour utilisateur: $userId');
+      print('🔔 Écoute des notifications pour utilisateur: $userId');
 
       // Fermer le channel existant s'il existe
       await _notificationChannel?.unsubscribe();
@@ -137,9 +133,9 @@ class RealtimeService {
           );
 
       await _notificationChannel?.subscribe();
-      _log.success('✅ Écoute des notifications activée');
+      print('✅ Écoute des notifications activée');
     } catch (e) {
-      _log.error('❌ Erreur écoute notifications: $e');
+      print('❌ Erreur écoute notifications: $e');
       rethrow;
     }
   }
@@ -158,10 +154,10 @@ class RealtimeService {
         'timestamp': DateTime.now().toIso8601String(),
       };
 
-      _log.info('🚨 Changement alerte: $eventType');
+      print('🚨 Changement alerte: $eventType');
       _alertController.add(eventData);
     } catch (e) {
-      _log.error('❌ Erreur traitement alerte: $e');
+      print('❌ Erreur traitement alerte: $e');
     }
   }
 
@@ -179,10 +175,10 @@ class RealtimeService {
         'timestamp': DateTime.now().toIso8601String(),
       };
 
-      _log.info('📍 Changement position: $eventType');
+      print('📍 Changement position: $eventType');
       _positionController.add(eventData);
     } catch (e) {
-      _log.error('❌ Erreur traitement position: $e');
+      print('❌ Erreur traitement position: $e');
     }
   }
 
@@ -200,10 +196,10 @@ class RealtimeService {
         'timestamp': DateTime.now().toIso8601String(),
       };
 
-      _log.info('🔔 Changement notification: $eventType');
+      print('🔔 Changement notification: $eventType');
       _notificationController.add(eventData);
     } catch (e) {
-      _log.error('❌ Erreur traitement notification: $e');
+      print('❌ Erreur traitement notification: $e');
     }
   }
 
@@ -216,7 +212,7 @@ class RealtimeService {
     Map<String, dynamic>? data,
   }) async {
     try {
-      _log.info('📤 Envoi notification: $title');
+      print('📤 Envoi notification: $title');
 
       final notificationData = {
         'utilisateur_id': userId,
@@ -229,9 +225,9 @@ class RealtimeService {
       };
 
       await _supabase.insert('notifications', notificationData);
-      _log.success('✅ Notification envoyée');
+      print('✅ Notification envoyée');
     } catch (e) {
-      _log.error('❌ Erreur envoi notification: $e');
+      print('❌ Erreur envoi notification: $e');
       rethrow;
     }
   }
@@ -247,7 +243,7 @@ class RealtimeService {
     double? heading,
   }) async {
     try {
-      _log.info('📍 Enregistrement position: $latitude, $longitude');
+      print('📍 Enregistrement position: $latitude, $longitude');
 
       final positionData = {
         'utilisateur_id': userId,
@@ -261,9 +257,9 @@ class RealtimeService {
       };
 
       await _supabase.insert('positions_gps', positionData);
-      _log.success('✅ Position enregistrée');
+      print('✅ Position enregistrée');
     } catch (e) {
-      _log.error('❌ Erreur enregistrement position: $e');
+      print('❌ Erreur enregistrement position: $e');
       rethrow;
     }
   }
@@ -271,7 +267,7 @@ class RealtimeService {
   /// Arrête l'écoute de tous les channels
   Future<void> stopListening() async {
     try {
-      _log.info('🛑 Arrêt de l\'écoute Realtime...');
+      print('🛑 Arrêt de l\'écoute Realtime...');
 
       await _alertChannel?.unsubscribe();
       await _positionChannel?.unsubscribe();
@@ -282,9 +278,9 @@ class RealtimeService {
       _notificationChannel = null;
 
       _isConnected = false;
-      _log.success('✅ Écoute Realtime arrêtée');
+      print('✅ Écoute Realtime arrêtée');
     } catch (e) {
-      _log.error('❌ Erreur arrêt écoute: $e');
+      print('❌ Erreur arrêt écoute: $e');
     }
   }
 
@@ -295,9 +291,9 @@ class RealtimeService {
       await _alertController.close();
       await _positionController.close();
       await _notificationController.close();
-      _log.info('🧹 Service Realtime nettoyé');
+      print('🧹 Service Realtime nettoyé');
     } catch (e) {
-      _log.error('❌ Erreur nettoyage Realtime: $e');
+      print('❌ Erreur nettoyage Realtime: $e');
     }
   }
 }

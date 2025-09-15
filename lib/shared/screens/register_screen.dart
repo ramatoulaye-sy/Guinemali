@@ -74,7 +74,7 @@ class _RegisterScreenState extends State<RegisterScreen>
         bottom: TabBar(
           controller: _tabController,
           labelColor: AppConstants.primaryColor,
-          unselectedLabelColor: Colors.grey,
+          unselectedLabelColor: AppConstants.primaryColor.withOpacity(0.5),
           indicatorColor: AppConstants.primaryColor,
           tabs: const [
             Tab(text: 'Type de compte', icon: Icon(Icons.person_outline)),
@@ -260,7 +260,7 @@ class _RegisterScreenState extends State<RegisterScreen>
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: AppConstants.primaryColor.withValues(alpha: 0.2),
+                color: AppConstants.primaryColor.withOpacity( 0.2),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -304,7 +304,7 @@ class _RegisterScreenState extends State<RegisterScreen>
         Text(
           AppConstants.appSlogan,
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: AppConstants.primaryColor.withValues(alpha: 0.7),
+            color: AppConstants.primaryColor.withOpacity( 0.7),
             fontStyle: FontStyle.italic,
           ),
           textAlign: TextAlign.center,
@@ -325,7 +325,7 @@ class _RegisterScreenState extends State<RegisterScreen>
         Text(
           title,
           style: theme.textTheme.headlineMedium?.copyWith(
-            color: AppConstants.blackColor,
+            color: AppConstants.primaryColor,
             fontWeight: FontWeight.bold,
           ),
           textAlign: TextAlign.center,
@@ -339,7 +339,7 @@ class _RegisterScreenState extends State<RegisterScreen>
         Text(
           subtitle,
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: AppConstants.blackColor,
+            color: AppConstants.primaryColor,
           ),
           textAlign: TextAlign.center,
         )
@@ -358,7 +358,7 @@ class _RegisterScreenState extends State<RegisterScreen>
       margin: const EdgeInsets.only(bottom: AppConstants.paddingMedium),
       child: Card(
         elevation: isSelected ? 8 : 2,
-        color: isSelected ? AppConstants.primaryColor.withValues(alpha: 0.1) : AppConstants.whiteColor,
+        color: isSelected ? AppConstants.primaryColor.withOpacity( 0.1) : AppConstants.whiteColor,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
           side: BorderSide(
@@ -385,7 +385,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                     shape: BoxShape.circle,
                     color: isSelected 
                         ? AppConstants.primaryColor 
-                        : AppConstants.primaryColor.withValues(alpha: 0.1),
+                        : AppConstants.primaryColor.withOpacity( 0.1),
                   ),
                   child: Icon(
                     _getUserTypeIcon(type),
@@ -407,14 +407,14 @@ class _RegisterScreenState extends State<RegisterScreen>
                         type.displayName,
                         style: theme.textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w600,
-                          color: isSelected ? AppConstants.primaryColor : AppConstants.blackColor,
+                          color: isSelected ? AppConstants.primaryColor : AppConstants.primaryColor,
                         ),
                       ),
                       const SizedBox(height: AppConstants.paddingSmall),
                       Text(
                         type.description,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: AppConstants.blackColor,
+                          color: AppConstants.primaryColor,
                         ),
                       ),
                     ],
@@ -467,9 +467,9 @@ class _RegisterScreenState extends State<RegisterScreen>
                   tooltip: 'Vérifier la disponibilité',
                 ),
             labelStyle: TextStyle(
-              color: _pseudoValidated ? AppConstants.successColor : AppConstants.blackColor,
+              color: _pseudoValidated ? AppConstants.successColor : AppConstants.primaryColor,
             ),
-            hintStyle: TextStyle(color: AppConstants.blackColor.withValues(alpha: 0.6)),
+            hintStyle: TextStyle(color: AppConstants.primaryColor.withOpacity( 0.6)),
             border: OutlineInputBorder(
               borderSide: BorderSide(
                 color: _pseudoValidated ? AppConstants.successColor : AppConstants.primaryColor,
@@ -484,13 +484,14 @@ class _RegisterScreenState extends State<RegisterScreen>
             ),
           ),
           style: TextStyle(
-            color: _pseudoValidated ? AppConstants.successColor : AppConstants.blackColor,
+            color: _pseudoValidated ? AppConstants.successColor : AppConstants.primaryColor,
           ),
           textInputAction: TextInputAction.done,
-          validator: _validatePseudo,
           inputFormatters: [
-            FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]')),
+            FilteringTextInputFormatter.deny(RegExp(r'\s')),
+            FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9_]')),
           ],
+          validator: (v) => _validatePseudo(v?.trim().toLowerCase()),
           onChanged: (value) {
             // Réinitialiser la validation si l'utilisateur modifie le pseudo
             if (_pseudoValidated && value != _pseudoController.text) {
@@ -511,9 +512,9 @@ class _RegisterScreenState extends State<RegisterScreen>
           Container(
             padding: const EdgeInsets.all(AppConstants.paddingMedium),
             decoration: BoxDecoration(
-              color: AppConstants.warningColor.withValues(alpha: 0.1),
+              color: AppConstants.warningColor.withOpacity( 0.1),
               borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
-              border: Border.all(color: AppConstants.warningColor.withValues(alpha: 0.3)),
+              border: Border.all(color: AppConstants.warningColor.withOpacity( 0.3)),
             ),
             child: Row(
               children: [
@@ -546,22 +547,22 @@ class _RegisterScreenState extends State<RegisterScreen>
             hintText: 'Entrez votre prénom',
             prefixIcon: Icon(
               Icons.person_outline, 
-              color: _pseudoValidated ? AppConstants.primaryColor : Colors.grey,
+              color: _pseudoValidated ? AppConstants.primaryColor : AppConstants.primaryColor.withOpacity(0.5),
             ),
             labelStyle: TextStyle(
-              color: _pseudoValidated ? AppConstants.blackColor : Colors.grey,
+              color: _pseudoValidated ? AppConstants.primaryColor : AppConstants.primaryColor.withOpacity(0.5),
             ),
             hintStyle: TextStyle(
-              color: _pseudoValidated ? AppConstants.blackColor.withValues(alpha: 0.6) : Colors.grey,
+              color: _pseudoValidated ? AppConstants.primaryColor.withOpacity( 0.6) : AppConstants.primaryColor.withOpacity(0.5),
             ),
             border: OutlineInputBorder(
               borderSide: BorderSide(
-                color: _pseudoValidated ? AppConstants.primaryColor : Colors.grey,
+                color: _pseudoValidated ? AppConstants.primaryColor : AppConstants.primaryColor.withOpacity(0.5),
               ),
             ),
           ),
           style: TextStyle(
-            color: _pseudoValidated ? AppConstants.blackColor : Colors.grey,
+            color: _pseudoValidated ? AppConstants.primaryColor : AppConstants.primaryColor.withOpacity(0.5),
           ),
           textInputAction: TextInputAction.next,
           validator: _pseudoValidated ? _validatePrenom : null,
@@ -581,29 +582,29 @@ class _RegisterScreenState extends State<RegisterScreen>
             hintText: 'Créez votre code PIN sécurisé',
             prefixIcon: Icon(
               Icons.lock_outline, 
-              color: _pseudoValidated ? AppConstants.primaryColor : Colors.grey,
+              color: _pseudoValidated ? AppConstants.primaryColor : AppConstants.primaryColor.withOpacity(0.5),
             ),
             suffixIcon: IconButton(
               icon: Icon(
                 _obscurePin ? Icons.visibility : Icons.visibility_off,
-                color: _pseudoValidated ? AppConstants.primaryColor : Colors.grey,
+                color: _pseudoValidated ? AppConstants.primaryColor : AppConstants.primaryColor.withOpacity(0.5),
               ),
               onPressed: _pseudoValidated ? () => setState(() => _obscurePin = !_obscurePin) : null,
             ),
             labelStyle: TextStyle(
-              color: _pseudoValidated ? AppConstants.blackColor : Colors.grey,
+              color: _pseudoValidated ? AppConstants.primaryColor : AppConstants.primaryColor.withOpacity(0.5),
             ),
             hintStyle: TextStyle(
-              color: _pseudoValidated ? AppConstants.blackColor.withValues(alpha: 0.6) : Colors.grey,
+              color: _pseudoValidated ? AppConstants.primaryColor.withOpacity( 0.6) : AppConstants.primaryColor.withOpacity(0.5),
             ),
             border: OutlineInputBorder(
               borderSide: BorderSide(
-                color: _pseudoValidated ? AppConstants.primaryColor : Colors.grey,
+                color: _pseudoValidated ? AppConstants.primaryColor : AppConstants.primaryColor.withOpacity(0.5),
               ),
             ),
           ),
           style: TextStyle(
-            color: _pseudoValidated ? AppConstants.blackColor : Colors.grey,
+            color: _pseudoValidated ? AppConstants.primaryColor : AppConstants.primaryColor.withOpacity(0.5),
           ),
           obscureText: _obscurePin,
           keyboardType: TextInputType.number,
@@ -629,29 +630,29 @@ class _RegisterScreenState extends State<RegisterScreen>
             hintText: 'Répétez votre code PIN',
             prefixIcon: Icon(
               Icons.lock_outline, 
-              color: _pseudoValidated ? AppConstants.primaryColor : Colors.grey,
+              color: _pseudoValidated ? AppConstants.primaryColor : AppConstants.primaryColor.withOpacity(0.5),
             ),
             suffixIcon: IconButton(
               icon: Icon(
                 _obscureConfirmPin ? Icons.visibility : Icons.visibility_off,
-                color: _pseudoValidated ? AppConstants.primaryColor : Colors.grey,
+                color: _pseudoValidated ? AppConstants.primaryColor : AppConstants.primaryColor.withOpacity(0.5),
               ),
               onPressed: _pseudoValidated ? () => setState(() => _obscureConfirmPin = !_obscureConfirmPin) : null,
             ),
             labelStyle: TextStyle(
-              color: _pseudoValidated ? AppConstants.blackColor : Colors.grey,
+              color: _pseudoValidated ? AppConstants.primaryColor : AppConstants.primaryColor.withOpacity(0.5),
             ),
             hintStyle: TextStyle(
-              color: _pseudoValidated ? AppConstants.blackColor.withValues(alpha: 0.6) : Colors.grey,
+              color: _pseudoValidated ? AppConstants.primaryColor.withOpacity( 0.6) : AppConstants.primaryColor.withOpacity(0.5),
             ),
             border: OutlineInputBorder(
               borderSide: BorderSide(
-                color: _pseudoValidated ? AppConstants.primaryColor : Colors.grey,
+                color: _pseudoValidated ? AppConstants.primaryColor : AppConstants.primaryColor.withOpacity(0.5),
               ),
             ),
           ),
           style: TextStyle(
-            color: _pseudoValidated ? AppConstants.blackColor : Colors.grey,
+            color: _pseudoValidated ? AppConstants.primaryColor : AppConstants.primaryColor.withOpacity(0.5),
           ),
           obscureText: _obscureConfirmPin,
           keyboardType: TextInputType.number,
@@ -677,22 +678,22 @@ class _RegisterScreenState extends State<RegisterScreen>
             hintText: '+224 XXX XX XX XX (optionnel)',
             prefixIcon: Icon(
               Icons.phone, 
-              color: _pseudoValidated ? AppConstants.primaryColor : Colors.grey,
+              color: _pseudoValidated ? AppConstants.primaryColor : AppConstants.primaryColor.withOpacity(0.5),
             ),
             labelStyle: TextStyle(
-              color: _pseudoValidated ? AppConstants.blackColor : Colors.grey,
+              color: _pseudoValidated ? AppConstants.primaryColor : AppConstants.primaryColor.withOpacity(0.5),
             ),
             hintStyle: TextStyle(
-              color: _pseudoValidated ? AppConstants.blackColor : Colors.grey,
+              color: _pseudoValidated ? AppConstants.primaryColor : AppConstants.primaryColor.withOpacity(0.5),
             ),
             border: OutlineInputBorder(
               borderSide: BorderSide(
-                color: _pseudoValidated ? AppConstants.primaryColor : Colors.grey,
+                color: _pseudoValidated ? AppConstants.primaryColor : AppConstants.primaryColor.withOpacity(0.5),
               ),
             ),
           ),
           style: TextStyle(
-            color: _pseudoValidated ? AppConstants.blackColor : Colors.grey,
+            color: _pseudoValidated ? AppConstants.primaryColor : AppConstants.primaryColor.withOpacity(0.5),
           ),
           keyboardType: TextInputType.phone,
           textInputAction: TextInputAction.next,
@@ -711,19 +712,19 @@ class _RegisterScreenState extends State<RegisterScreen>
             labelText: 'Région',
             prefixIcon: Icon(
               Icons.location_on, 
-              color: _pseudoValidated ? AppConstants.primaryColor : Colors.grey,
+              color: _pseudoValidated ? AppConstants.primaryColor : AppConstants.primaryColor.withOpacity(0.5),
             ),
             labelStyle: TextStyle(
-              color: _pseudoValidated ? AppConstants.blackColor : Colors.grey,
+              color: _pseudoValidated ? AppConstants.primaryColor : AppConstants.primaryColor.withOpacity(0.5),
             ),
             border: OutlineInputBorder(
               borderSide: BorderSide(
-                color: _pseudoValidated ? AppConstants.primaryColor : Colors.grey,
+                color: _pseudoValidated ? AppConstants.primaryColor : AppConstants.primaryColor.withOpacity(0.5),
               ),
             ),
           ),
           style: TextStyle(
-            color: _pseudoValidated ? AppConstants.blackColor : Colors.grey,
+            color: _pseudoValidated ? AppConstants.primaryColor : AppConstants.primaryColor.withOpacity(0.5),
           ),
           dropdownColor: AppConstants.whiteColor,
           items: AppConstants.guineanRegions.map((region) {
@@ -732,7 +733,7 @@ class _RegisterScreenState extends State<RegisterScreen>
               child: Text(
                 region,
                 style: TextStyle(
-                  color: _pseudoValidated ? AppConstants.blackColor : Colors.grey,
+                  color: _pseudoValidated ? AppConstants.primaryColor : AppConstants.primaryColor.withOpacity(0.5),
                 ),
               ),
             );
@@ -752,33 +753,33 @@ class _RegisterScreenState extends State<RegisterScreen>
             labelText: 'Langue préférée',
             prefixIcon: Icon(
               Icons.language, 
-              color: _pseudoValidated ? AppConstants.primaryColor : Colors.grey,
+              color: _pseudoValidated ? AppConstants.primaryColor : AppConstants.primaryColor.withOpacity(0.5),
             ),
             labelStyle: TextStyle(
-              color: _pseudoValidated ? AppConstants.blackColor : Colors.grey,
+              color: _pseudoValidated ? AppConstants.primaryColor : AppConstants.primaryColor.withOpacity(0.5),
             ),
             border: OutlineInputBorder(
               borderSide: BorderSide(
-                color: _pseudoValidated ? AppConstants.primaryColor : Colors.grey,
+                color: _pseudoValidated ? AppConstants.primaryColor : AppConstants.primaryColor.withOpacity(0.5),
               ),
             ),
           ),
           style: TextStyle(
-            color: _pseudoValidated ? AppConstants.blackColor : Colors.grey,
+            color: _pseudoValidated ? AppConstants.primaryColor : AppConstants.primaryColor.withOpacity(0.5),
           ),
           dropdownColor: AppConstants.whiteColor,
           items: const [
             DropdownMenuItem(
               value: 'fr',
-              child: Text('Français', style: TextStyle(color: AppConstants.blackColor)),
+              child: Text('Français', style: TextStyle(color: AppConstants.primaryColor)),
             ),
             DropdownMenuItem(
               value: 'en',
-              child: Text('English', style: TextStyle(color: AppConstants.blackColor)),
+              child: Text('English', style: TextStyle(color: AppConstants.primaryColor)),
             ),
             DropdownMenuItem(
               value: 'ff',
-              child: Text('Fulani', style: TextStyle(color: AppConstants.blackColor)),
+              child: Text('Fulani', style: TextStyle(color: AppConstants.primaryColor)),
             ),
           ],
           onChanged: _pseudoValidated ? (value) => setState(() => _selectedLanguage = value!) : null,
@@ -797,9 +798,9 @@ class _RegisterScreenState extends State<RegisterScreen>
       padding: const EdgeInsets.all(AppConstants.paddingMedium),
       margin: const EdgeInsets.only(bottom: AppConstants.paddingMedium),
       decoration: BoxDecoration(
-        color: AppConstants.errorColor.withValues(alpha: 0.1),
+        color: AppConstants.errorColor.withOpacity( 0.1),
         borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
-        border: Border.all(color: AppConstants.errorColor.withValues(alpha: 0.3)),
+        border: Border.all(color: AppConstants.errorColor.withOpacity( 0.3)),
       ),
       child: Row(
         children: [
@@ -832,7 +833,7 @@ class _RegisterScreenState extends State<RegisterScreen>
               'Résumé de votre compte',
               style: theme.textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.bold,
-                color: AppConstants.blackColor,
+                color: AppConstants.primaryColor,
               ),
             ),
             const SizedBox(height: AppConstants.paddingMedium),
@@ -866,14 +867,14 @@ class _RegisterScreenState extends State<RegisterScreen>
               '$label:',
               style: const TextStyle(
                 fontWeight: FontWeight.w500,
-                color: AppConstants.blackColor,
+                color: AppConstants.primaryColor,
               ),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(color: AppConstants.blackColor),
+              style: const TextStyle(color: AppConstants.primaryColor),
             ),
           ),
         ],
@@ -897,7 +898,7 @@ class _RegisterScreenState extends State<RegisterScreen>
               },
               title: const Text(
                 'J\'accepte les conditions d\'utilisation et la politique de confidentialité',
-                style: TextStyle(color: AppConstants.blackColor),
+                style: TextStyle(color: AppConstants.primaryColor),
               ),
               controlAffinity: ListTileControlAffinity.leading,
               activeColor: AppConstants.primaryColor,
@@ -908,7 +909,7 @@ class _RegisterScreenState extends State<RegisterScreen>
             Container(
               padding: const EdgeInsets.all(AppConstants.paddingSmall),
               decoration: BoxDecoration(
-                color: _acceptTerms ? AppConstants.successColor.withValues(alpha: 0.1) : AppConstants.warningColor.withValues(alpha: 0.1),
+                color: _acceptTerms ? AppConstants.successColor.withOpacity( 0.1) : AppConstants.warningColor.withOpacity( 0.1),
                 borderRadius: BorderRadius.circular(AppConstants.borderRadiusSmall),
                 border: Border.all(
                   color: _acceptTerms ? AppConstants.successColor : AppConstants.warningColor,
@@ -946,14 +947,14 @@ class _RegisterScreenState extends State<RegisterScreen>
                   onPressed: () => _showTermsDialog(),
                   child: const Text(
                     'Lire les conditions',
-                    style: TextStyle(color: AppConstants.blackColor),
+                    style: TextStyle(color: AppConstants.primaryColor),
                   ),
                 ),
                 TextButton(
                   onPressed: () => _showPrivacyDialog(),
                   child: const Text(
                     'Politique de confidentialité',
-                    style: TextStyle(color: AppConstants.blackColor),
+                    style: TextStyle(color: AppConstants.primaryColor),
                   ),
                 ),
               ],
@@ -1009,7 +1010,7 @@ class _RegisterScreenState extends State<RegisterScreen>
               style: const TextStyle(color: AppConstants.whiteColor),
             ),
             style: ElevatedButton.styleFrom(
-              backgroundColor: canRegister ? AppConstants.primaryColor : Colors.grey,
+              backgroundColor: canRegister ? AppConstants.primaryColor : AppConstants.primaryColor.withOpacity(0.5),
               foregroundColor: AppConstants.whiteColor,
             ),
           ),
@@ -1192,7 +1193,7 @@ class _RegisterScreenState extends State<RegisterScreen>
       builder: (context) => AlertDialog(
         title: const Text(
           'Pseudo déjà utilisé',
-          style: TextStyle(color: AppConstants.blackColor),
+          style: TextStyle(color: AppConstants.primaryColor),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1200,7 +1201,7 @@ class _RegisterScreenState extends State<RegisterScreen>
           children: [
             const Text(
               'Ce pseudo est déjà utilisé. Voici quelques suggestions :',
-              style: TextStyle(color: AppConstants.blackColor),
+              style: TextStyle(color: AppConstants.primaryColor),
             ),
             const SizedBox(height: 16),
             ...suggestions.map((suggestion) => ListTile(
@@ -1281,7 +1282,7 @@ class _RegisterScreenState extends State<RegisterScreen>
       
              final registrationData = RegistrationData(
                    prenom: _prenomController.text.trim(),
-                   pseudo: _pseudoController.text.trim(), // Utiliser le pseudo saisi par l'utilisateur
+                   pseudo: _pseudoController.text.trim().toLowerCase(), // normaliser
          pin: _pinController.text.trim(),
          numTel: _phoneController.text.trim().isEmpty ? '' : _phoneController.text.trim(),
          langue: _selectedLanguage,
@@ -1297,7 +1298,7 @@ class _RegisterScreenState extends State<RegisterScreen>
         // Utiliser l'AuthProvider au lieu du service direct
         final success = await context.read<AuthProvider>().register(
           prenom: _prenomController.text.trim(),
-          pseudo: _pseudoController.text.trim(), // Passer le pseudo saisi
+          pseudo: _pseudoController.text.trim().toLowerCase(),
           pin: _pinController.text.trim(),
           numTel: _phoneController.text.trim().isEmpty ? '' : _phoneController.text.trim(),
           userType: _selectedUserType.value,
@@ -1419,7 +1420,7 @@ class _RegisterScreenState extends State<RegisterScreen>
       builder: (context) => AlertDialog(
         title: const Text(
           'Conditions d\'utilisation',
-          style: TextStyle(color: AppConstants.blackColor),
+          style: TextStyle(color: AppConstants.primaryColor),
         ),
         content: const SingleChildScrollView(
           child: Text(
@@ -1429,7 +1430,7 @@ class _RegisterScreenState extends State<RegisterScreen>
             '• Respecter la communauté d\'utilisateurs\n'
             '• Protéger vos identifiants de connexion\n\n'
             'L\'utilisation abusive peut entraîner la suspension du compte.',
-            style: TextStyle(color: AppConstants.blackColor),
+            style: TextStyle(color: AppConstants.primaryColor),
           ),
         ),
         actions: [
@@ -1437,7 +1438,7 @@ class _RegisterScreenState extends State<RegisterScreen>
             onPressed: () => Navigator.of(context).pop(),
             child: const Text(
               'Fermer',
-              style: TextStyle(color: AppConstants.blackColor),
+              style: TextStyle(color: AppConstants.primaryColor),
             ),
           ),
         ],
@@ -1452,7 +1453,7 @@ class _RegisterScreenState extends State<RegisterScreen>
       builder: (context) => AlertDialog(
         title: const Text(
           'Politique de confidentialité',
-          style: TextStyle(color: AppConstants.blackColor),
+          style: TextStyle(color: AppConstants.primaryColor),
         ),
         content: const SingleChildScrollView(
           child: Text(
@@ -1462,7 +1463,7 @@ class _RegisterScreenState extends State<RegisterScreen>
             '• Les alertes sont traitées de manière confidentielle\n'
             '• Vous pouvez supprimer votre compte à tout moment\n\n'
             'Vos données ne sont utilisées que pour assurer votre sécurité.',
-            style: TextStyle(color: AppConstants.blackColor),
+            style: TextStyle(color: AppConstants.primaryColor),
           ),
         ),
         actions: [

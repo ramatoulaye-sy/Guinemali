@@ -31,8 +31,8 @@ class AuthService {
   /// Indique si l'utilisateur est connecté
   bool get isLoggedIn => _currentUser != null;
 
-  /// Retourne l'ID de l'utilisateur actuel
-  String? get userId => _currentUser?.id;
+  /// Retourne l'ID de l'utilisateur actuel (fallback sur session Auth)
+  String? get userId => _currentUser?.id ?? _supabase.currentUserId;
 
   /// Retourne le type d'utilisateur actuel
   UserType? get userType => _currentUser?.typeUtilisateur;
@@ -40,13 +40,18 @@ class AuthService {
   /// Initialise le service d'authentification
   Future<void> initialize() async {
     try {
-      // Charger l'utilisateur depuis le stockage local
-      await _loadUserFromLocalStorage();
+      // Vérifier d'abord la session Supabase Auth
+      await _checkSupabaseSession();
+      
+      // Si pas de session Supabase, essayer de charger depuis le stockage local
+      if (_currentUser == null) {
+        await _loadUserFromLocalStorage();
+      }
       
       if (AppConstants.enableLogging) {
         print('✅ AuthService initialisé');
         if (_currentUser != null) {
-          print('👤 Utilisateur chargé depuis le stockage local: ${_currentUser!.prenom}');
+          print('👤 Utilisateur chargé: ${_currentUser!.prenom}');
         } else {
           print('👤 Aucun utilisateur connecté');
         }
@@ -55,6 +60,84 @@ class AuthService {
       if (AppConstants.enableLogging) {
         print('❌ Erreur initialisation AuthService: $e');
       }
+    }
+  }
+
+  /// Vérifie la session Supabase Auth et charge l'utilisateur
+  Future<void> _checkSupabaseSession() async {
+    try {
+      final session = _supabase.client.auth.currentSession;
+      if (session != null && session.user != null) {
+        // Session Supabase active, charger le profil utilisateur
+        final response = await _supabase.select(
+          'utilisateurs',
+          filters: {'id': session.user!.id},
+          limit: 1,
+        );
+
+        if (response != null && response.isNotEmpty) {
+          _currentUser = UserModel.fromJson(response.first);
+          
+          // Sauvegarder en local pour la prochaine fois
+          await _saveUserToLocalStorage();
+          
+          if (AppConstants.enableLogging) {
+            print('✅ Session Supabase active - Utilisateur: ${_currentUser!.prenom}');
+          }
+        } else {
+          // Créer automatiquement le profil s'il n'existe pas
+          await _createUserProfileFromSession(session.user!);
+        }
+      }
+    } catch (e) {
+      if (AppConstants.enableLogging) {
+        print('❌ Erreur vérification session Supabase: $e');
+      }
+    }
+  }
+
+  /// Crée automatiquement un profil utilisateur à partir de la session Supabase
+  Future<void> _createUserProfileFromSession(User user) async {
+    try {
+      // Extraire le pseudo de l'email (format: pseudo@gmail.com)
+      final email = user.email ?? '';
+      final pseudo = email.split('@').first;
+      
+      final userData = {
+        'id': user.id,
+        'prenom': pseudo, // Utiliser le pseudo comme prénom par défaut
+        'pseudo': pseudo,
+        'num_tel': '', // À compléter plus tard
+        'type_utilisateur': 'victime',
+        'langue': 'fr',
+        'region': '',
+        'actif': true,
+        'date_creation': DateTime.now().toIso8601String(),
+      };
+
+      await _supabase.insert('utilisateurs', userData);
+      _currentUser = UserModel.fromJson(userData);
+      
+      // Sauvegarder en local
+      await _saveUserToLocalStorage();
+      
+      if (AppConstants.enableLogging) {
+        print('✅ Profil utilisateur créé automatiquement: ${_currentUser!.prenom}');
+      }
+    } catch (e) {
+      if (AppConstants.enableLogging) {
+        print('❌ Erreur création profil utilisateur: $e');
+      }
+    }
+  }
+
+  /// Sauvegarde l'utilisateur dans le stockage local
+  Future<void> _saveUserToLocalStorage() async {
+    if (_currentUser != null) {
+      await _storage.saveString(AppConstants.keyUserId, _currentUser!.id);
+      await _storage.saveString(AppConstants.keyUserPrenom, _currentUser!.prenom);
+      await _storage.saveString(AppConstants.keyUserType, _currentUser!.typeUtilisateur.value);
+      await _storage.setBool(AppConstants.keyIsLoggedIn, true);
     }
   }
 
@@ -122,10 +205,33 @@ class AuthService {
         throw Exception('Ce pseudo est déjà utilisé');
       }
       
-      // Générer un UUID pour l'utilisateur (sans Supabase Auth)
-      print('📝 Génération de l\'ID utilisateur...');
-      final userId = _uuid.v4();
-      print('✅ ID utilisateur généré: $userId');
+      // Créer le compte Supabase Auth (email synthétique basé sur le pseudo)
+      final synthesizedEmail = '${registrationData.pseudo}@gmail.com';
+      final synthesizedPassword = '${registrationData.pin}_${registrationData.pseudo}';
+      print('🔐 Création compte Auth pour: $synthesizedEmail');
+      final authResponse = await _supabase.signUpWithEmail(
+        email: synthesizedEmail,
+        password: synthesizedPassword,
+        data: {
+          'pseudo': registrationData.pseudo,
+          'type_utilisateur': registrationData.typeUtilisateur == UserType.victime ? 'victime' : 'aidant',
+        },
+      );
+      var authUser = authResponse.user;
+      // Si l'email n'est pas auto-confirmé, il se peut que la session soit nulle ici
+      if (authResponse.session == null || authUser == null) {
+        print('ℹ️ Pas de session après signUp, tentative de connexion immédiate...');
+        final signInResp = await _supabase.signInWithEmail(
+          email: synthesizedEmail,
+          password: synthesizedPassword,
+        );
+        authUser = signInResp.user ?? _supabase.currentUser;
+      }
+      if (authUser == null) {
+        throw Exception('Inscription créée. Veuillez activer l\'auto-confirmation des emails dans Supabase ou confirmer l\'email.');
+      }
+      final userId = authUser.id;
+      print('✅ Session active, userId=${authUser.id}');
       
        // Préparer les données avec gestion des champs obligatoires et optionnels
       final userData = <String, dynamic>{
@@ -206,14 +312,16 @@ class AuthService {
   Future<UserModel> login(LoginData loginData) async {
     try {
       print('🔐 === DÉBUT DE LA CONNEXION ===');
-      print('🔍 Tentative de connexion pour: ${loginData.pseudo}');
+      // Normaliser le pseudo
+      final normalizedPseudo = loginData.pseudo.trim().toLowerCase();
+      print('🔍 Tentative de connexion pour: $normalizedPseudo');
       
       // Protection anti-bruteforce simple (stockage local)
       const int maxAttempts = 5;
       const int cooldownSeconds = 60;
 
-      final String keyAttempts = 'login_failed_count_${loginData.pseudo}';
-      final String keyLockUntil = 'login_lock_until_${loginData.pseudo}';
+      final String keyAttempts = 'login_failed_count_$normalizedPseudo';
+      final String keyLockUntil = 'login_lock_until_$normalizedPseudo';
 
       final int failedAttempts = _storage.getInt(keyAttempts, defaultValue: 0);
       final String? lockUntilIso = _storage.getString(keyLockUntil);
@@ -245,53 +353,43 @@ class AuthService {
         return testUser;
       }
       
-      // MODE NORMAL - Utiliser Supabase
-      final hashedPin = _hashPin(loginData.pin);
+      // MODE NORMAL - Utiliser Supabase Auth
+      final synthesizedEmail = '$normalizedPseudo@gmail.com';
+      final synthesizedPassword = '${loginData.pin}_$normalizedPseudo';
+      print('🔐 Connexion via Supabase Auth: $synthesizedEmail');
+      await _supabase.signInWithEmail(
+        email: synthesizedEmail,
+        password: synthesizedPassword,
+      );
 
-      // 1) Récupérer l'utilisateur par pseudo et actif
-      final userResponse = await _supabase.select(
+      // Récupérer le profil utilisateur lié à l'auth.uid()
+      final authUser = _supabase.currentUser;
+      if (authUser == null) {
+        throw Exception('Session Auth introuvable après connexion');
+      }
+
+      var userResponse = await _supabase.select(
         'utilisateurs',
         filters: {
-          'pseudo': loginData.pseudo,
+          'id': authUser.id,
           'actif': true,
         },
         limit: 1,
       );
 
-      print('📊 Réponse utilisateur: $userResponse');
-
       if (userResponse == null || userResponse.isEmpty) {
-        print('❌ Utilisateur introuvable ou inactif');
-        await _handleFailedLogin(loginData.pseudo);
-        // Incrémente les échecs et applique cooldown si nécessaire
-        await _storage.setInt(keyAttempts, failedAttempts + 1);
-        if (failedAttempts + 1 >= maxAttempts) {
-          final until = DateTime.now().add(const Duration(seconds: cooldownSeconds));
-          await _storage.saveString(keyLockUntil, until.toIso8601String());
-        }
-        throw Exception('Pseudo introuvable');
+        // Créer un profil minimal si absent (migration douce)
+        final created = await _supabase.insert('utilisateurs', {
+          'id': authUser.id,
+          'pseudo': normalizedPseudo,
+          'prenom': normalizedPseudo,
+          'type_utilisateur': 'victime',
+          'actif': true,
+        });
+        userResponse = created;
       }
 
-      final userData = userResponse.first;
-
-      // 2) Vérifier le PIN localement pour éviter tout problème de filtre côté serveur
-      final storedHash = (userData['pin_chiffre'] ?? '').toString();
-      if (storedHash.isEmpty || storedHash != hashedPin) {
-        print('❌ PIN incorrect pour ${loginData.pseudo}');
-        await _handleFailedLogin(loginData.pseudo);
-        // Incrémente les échecs et applique cooldown si nécessaire
-        await _storage.setInt(keyAttempts, failedAttempts + 1);
-        if (failedAttempts + 1 >= maxAttempts) {
-          final until = DateTime.now().add(const Duration(seconds: cooldownSeconds));
-          await _storage.saveString(keyLockUntil, until.toIso8601String());
-        }
-        throw Exception('PIN incorrect');
-      }
-      print('📝 Données utilisateur récupérées: ${userData.keys}');
-      print('✅ Identifiants valides, connexion autorisée');
-
-      // Créer l'objet UserModel directement depuis nos données
-      final userModel = UserModel.fromJson(userData);
+      final userModel = UserModel.fromJson(userResponse.first);
       _currentUser = userModel;
 
       // Mettre à jour la dernière connexion avec la fonction RPC existante
@@ -306,7 +404,7 @@ class AuthService {
 
       // Journaliser la connexion
       await _logAction('connexion', {
-        'pseudo': loginData.pseudo,
+        'pseudo': normalizedPseudo,
       });
 
       if (AppConstants.enableLogging) {

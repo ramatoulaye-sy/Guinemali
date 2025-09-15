@@ -25,24 +25,20 @@ import '../test_rpc_functions.dart';
 
 /// Configuration centralisée du routeur de l'application
 class AppRouter {
-  static GoRouter? _router;
-
-  /// Obtient l'instance du routeur configuré
-  static GoRouter get router {
-    _router ??= _createRouter();
-    return _router!;
-  }
-
-  /// Crée et configure le routeur principal
-  static GoRouter _createRouter() {
+  /// Fabrique un routeur en fonction de l'état d'authentification courant
+  static GoRouter createRouter(AuthProvider authProvider) {
+    final startLocation = authProvider.isAuthenticated
+        ? AppConstants.routeVictimDashboard
+        : AppConstants.routeWelcome;
     return GoRouter(
-      initialLocation: AppConstants.routeWelcome, // Commencer par l'écran de bienvenue
+      initialLocation: startLocation,
       debugLogDiagnostics: true,
       
       // Logique de redirection basée sur l'authentification
-      redirect: (context, state) {
-        return _handleRedirect(context, state);
-      },
+      redirect: (context, state) => _handleRedirect(context, state),
+
+      // Faire re-évaluer la redirection quand l'état change
+      refreshListenable: authProvider,
 
       // Configuration des routes
       routes: _buildRoutes(),
@@ -54,10 +50,19 @@ class AppRouter {
     try {
       // Vérification de l'authentification
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      // Tant que l'initialisation est en cours, ne pas rediriger pour éviter l'effet d'écran d'accueil clignotant
+      if (authProvider.isLoading) {
+        return null;
+      }
       final isLoggedIn = authProvider.isAuthenticated;
       final currentRoute = state.uri.path;
 
       print('🔄 Redirection - Route: $currentRoute, Authentifié: $isLoggedIn');
+
+      // Ne jamais bloquer l'accès à l'écran d'alerte active
+      if (currentRoute == AppConstants.routeVictimActiveAlert) {
+        return null;
+      }
 
       // Vérifier l'accès aux routes protégées
       if (_isProtectedRoute(currentRoute) && !isLoggedIn) {

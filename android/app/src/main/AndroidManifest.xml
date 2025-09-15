@@ -32,6 +32,9 @@
     <!-- Appels téléphoniques d'urgence -->
     <uses-permission android:name="android.permission.CALL_PHONE" />
     
+    <!-- Contacts pour sélection depuis le répertoire -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    
     <!-- Vibration pour les alertes -->
     <uses-permission android:name="android.permission.VIBRATE" />
 

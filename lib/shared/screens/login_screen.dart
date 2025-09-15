@@ -92,10 +92,10 @@ class _LoginScreenState extends State<LoginScreen> {
           height: 80,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-                            color: AppConstants.primaryColor.withValues(alpha: 0.1),
+                            color: AppConstants.primaryColor.withOpacity(0.1),
             boxShadow: [
               BoxShadow(
-                color: AppConstants.primaryColor.withValues(alpha: 0.2),
+                color: AppConstants.primaryColor.withOpacity(0.2),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -136,7 +136,7 @@ class _LoginScreenState extends State<LoginScreen> {
         Text(
           'Connectez-vous avec votre pseudo et votre code PIN',
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: Colors.grey[600],
+                        color: AppConstants.primaryColor.withOpacity(0.7),
             height: 1.4,
           ),
           textAlign: TextAlign.center,
@@ -229,7 +229,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 textInputAction: TextInputAction.next,
                 autocorrect: false,
-                validator: _validatePseudo,
+                inputFormatters: [
+                  FilteringTextInputFormatter.deny(RegExp(r'\s')),
+                ],
+                validator: (v) => _validatePseudo(v?.trim().toLowerCase()),
                 onChanged: (value) => setState(() {}),
               )
                   .animate()
@@ -284,14 +287,14 @@ class _LoginScreenState extends State<LoginScreen> {
                   Icon(
                     Icons.info_outline,
                     size: AppConstants.iconSizeSmall,
-                    color: Colors.grey[600],
+                    color: AppConstants.primaryColor.withOpacity(0.7),
                   ),
                   const SizedBox(width: AppConstants.paddingSmall),
                   Expanded(
                     child: Text(
                       'Votre code PIN contient ${AppConstants.pinMinLength} à ${AppConstants.pinMaxLength} chiffres',
                       style: theme.textTheme.labelSmall?.copyWith(
-                        color: Colors.grey[600],
+                        color: AppConstants.primaryColor.withOpacity(0.7),
                       ),
                     ),
                   ),
@@ -373,7 +376,7 @@ class _LoginScreenState extends State<LoginScreen> {
             Text(
               'Pas encore de compte ? ',
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: Colors.grey[600],
+                        color: AppConstants.primaryColor.withOpacity(0.7),
               ),
             ),
             TextButton(
@@ -440,7 +443,7 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       // Utiliser l'AuthProvider au lieu du service direct
       final success = await context.read<AuthProvider>().login(
-        pseudo: _pseudoController.text.trim(),
+        pseudo: _pseudoController.text.trim().toLowerCase(),
         pin: _pinController.text.trim(),
       );
       

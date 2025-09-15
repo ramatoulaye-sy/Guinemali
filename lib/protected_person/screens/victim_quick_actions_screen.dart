@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:go_router/go_router.dart';
+import '../widgets/quick_actions_panel.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/services/storage_service.dart';
@@ -58,25 +59,12 @@ class _VictimQuickActionsScreenState extends State<VictimQuickActionsScreen> {
           onPressed: () => context.pop(),
         ),
       ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(16.0),
-          children: [
-            // Carte Actions Rapides
-            _buildQuickActionsCard(),
-
-            const SizedBox(height: 24),
-
-            // Carte Configuration Rapide
-            _buildQuickConfigCard(),
-
-            const SizedBox(height: 16),
-
-            // Carte Plan d'Urgence
-            _buildEmergencyPlanCard(),
-
-            const SizedBox(height: 24),
-          ],
+      body: const SafeArea(
+        child: Padding(
+          padding: EdgeInsets.all(16.0),
+          child: SingleChildScrollView(
+            child: QuickActionsPanel(),
+          ),
         ),
       ),
     );
