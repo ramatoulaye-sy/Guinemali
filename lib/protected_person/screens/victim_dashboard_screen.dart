@@ -1131,28 +1131,22 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
     final confirmed = await _showEmergencyConfirmation();
     if (!confirmed) return;
 
-    // Navigation immédiate vers l'écran d'alerte active (avant tout traitement)
-    try {
-      // Fermer tout éventuel dialog restant
+    // Navigation immédiate et unique vers l'écran d'alerte active
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       try {
-        final rootNav = Navigator.of(context, rootNavigator: true);
-        int safetyPops = 0;
-        while (rootNav.canPop() && safetyPops < 3) {
-          rootNav.pop();
-          safetyPops++;
-        }
-      } catch (_) {}
-      // Forcer la navigation immédiate
-      try {
-        Navigator.of(context, rootNavigator: true).pushReplacement(
-          MaterialPageRoute(builder: (_) => const VictimActiveAlertScreen()),
-        );
+        context.goNamed('victim_active_alert');
       } catch (_) {
-        try { context.goNamed('victim_active_alert'); } catch (_) {
+        try { context.go(AppConstants.routeVictimActiveAlert); } catch (_) {}
+      }
+      // Sécurité: relancer une fois après un bref délai pour neutraliser une transition concurrente
+      Future.delayed(const Duration(milliseconds: 200), () {
+        try {
+          context.goNamed('victim_active_alert');
+        } catch (_) {
           try { context.go(AppConstants.routeVictimActiveAlert); } catch (_) {}
         }
-      }
-    } catch (_) {}
+      });
+    });
 
     try {
       // Rafraîchir l'utilisateur et vérifier la session
@@ -1172,16 +1166,7 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
         return;
       }
 
-      // 2. Afficher le message de chargement
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('🚨 Création de l\'alerte d\'urgence...'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
+      // 2. (optionnel) message de chargement retiré pour éviter conflit UI pendant navigation
 
       // 3. Obtenir la position actuelle
       final position = await GeolocationService.instance.getCurrentPosition();

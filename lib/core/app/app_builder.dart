@@ -64,6 +64,21 @@ class AppBuilder {
       
       child: Consumer<AuthProvider>(
         builder: (context, authProvider, child) {
+          if (authProvider.isLoading) {
+            return MaterialApp(
+              title: 'Guinèmali',
+              debugShowCheckedModeBanner: false,
+              theme: AppConfig.getTheme(isDarkMode: false),
+              darkTheme: AppConfig.getTheme(isDarkMode: true),
+              supportedLocales: AppConfig.getSupportedLocales(),
+              localizationsDelegates: AppConfig.getLocalizationDelegates(),
+              home: const _StartupSplash(),
+              builder: (context, child) {
+                AppConfig.configureSystemUI();
+                return child ?? const SizedBox.shrink();
+              },
+            );
+          }
           return MaterialApp.router(
             title: 'Guinèmali',
             debugShowCheckedModeBanner: false,
@@ -112,5 +127,25 @@ class AppBuilder {
       print('❌ Erreur lors de l\'initialisation des services: $e');
       rethrow;
     }
+  }
+}
+
+class _StartupSplash extends StatelessWidget {
+  const _StartupSplash({Key? key}) : super(key: key);
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 2)),
+            SizedBox(height: 12),
+            Text('Chargement...', style: TextStyle(color: Colors.black54)),
+          ],
+        ),
+      ),
+    );
   }
 }

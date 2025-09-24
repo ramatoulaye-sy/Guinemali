@@ -294,7 +294,7 @@ class AlertService {
             : (rawTs?.toString());
 
         try {
-          await SupabaseService.instance.insert('positions_alertes', {
+          await SupabaseService.instance.upsert('positions_alertes', {
             'id': loc['id'],
             'alerte_id': loc['alert_id'],
             'position_lat': loc['latitude'],
@@ -302,7 +302,7 @@ class AlertService {
             'precision_m': loc['accuracy'],
             'timestamp': ts,
             'utilisateur_id': userId,
-          });
+          }, onConflict: 'id', ignoreDuplicates: true);
           await StorageService.instance.markLocationSynced(loc['id'] as String);
         } catch (e) {
           // Ajouter à la file de synchronisation en cas d'échec

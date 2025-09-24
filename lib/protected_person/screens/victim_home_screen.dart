@@ -201,31 +201,14 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
       _isEmergencyMode = true;
     });
 
-    // Navigation immédiate vers l'écran d'alerte active (fermer d'abord toute boîte de dialogue)
+    // Navigation immédiate et unique vers l'écran d'alerte active
     if (mounted) {
-      Future.microtask(() {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         try {
-          final rootNav = Navigator.of(context, rootNavigator: true);
-          int safetyPops = 0;
-          while (rootNav.canPop() && safetyPops < 3) {
-            rootNav.pop();
-            safetyPops++;
-          }
-        } catch (_) {}
-
-        try {
-          Navigator.of(context, rootNavigator: true).pushReplacement(
-            MaterialPageRoute(builder: (_) => const VictimActiveAlertScreen()),
-          );
+          context.goNamed('victim_active_alert');
         } catch (_) {
-          try {
-            context.goNamed('victim_active_alert');
-          } catch (_) {
-            try {
-              context.go(AppConstants.routeVictimActiveAlert);
-            } catch (_) {}
-          }
+          try { context.go(AppConstants.routeVictimActiveAlert); } catch (_) {}
         }
       });
     }

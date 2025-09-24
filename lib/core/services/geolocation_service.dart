@@ -161,14 +161,14 @@ class GeolocationService {
         
         // Tenter de synchroniser immédiatement
         try {
-          await SupabaseService.instance.insert('positions_alertes', {
+          await SupabaseService.instance.upsert('positions_alertes', {
             'id': locationId,
             'alerte_id': alertId,
-            'latitude': pos.latitude,
-            'longitude': pos.longitude,
-            'accuracy': pos.accuracy,
-            'timestamp': pos.timestamp,
-          });
+            'position_lat': pos.latitude,
+            'position_lng': pos.longitude,
+            'precision_m': pos.accuracy,
+            'timestamp': pos.timestamp?.toUtc().toIso8601String(),
+          }, onConflict: 'id', ignoreDuplicates: true);
           await StorageService.instance.markLocationSynced(locationId);
           if (AppConstants.enableLogging) {
             print('📍 Position synchronisée: ${pos.latitude}, ${pos.longitude}');
@@ -181,10 +181,10 @@ class GeolocationService {
           await SyncService.instance.addToSyncQueue('position', {
             'id': locationId,
             'alerte_id': alertId,
-            'latitude': pos.latitude,
-            'longitude': pos.longitude,
-            'accuracy': pos.accuracy,
-            'timestamp': pos.timestamp,
+            'position_lat': pos.latitude,
+            'position_lng': pos.longitude,
+            'precision_m': pos.accuracy,
+            'timestamp': pos.timestamp?.toUtc().toIso8601String(),
           });
         }
         

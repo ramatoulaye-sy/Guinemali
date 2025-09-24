@@ -202,7 +202,21 @@ class SyncService {
   /// Synchroniser une position GPS
   Future<void> _syncPosition(Map<String, dynamic> positionData) async {
     try {
-      await SupabaseService.instance.insert('positions_alertes', positionData);
+      // Normaliser timestamp si présent
+      if (positionData['timestamp'] is DateTime) {
+        positionData['timestamp'] = (positionData['timestamp'] as DateTime).toUtc().toIso8601String();
+      }
+      // Harmoniser les noms de colonnes attendus par la table
+      positionData
+        ..remove('latitude')
+        ..remove('longitude')
+        ..remove('accuracy');
+      await SupabaseService.instance.upsert(
+        'positions_alertes',
+        positionData,
+        onConflict: 'id',
+        ignoreDuplicates: true,
+      );
       print('✅ Position synchronisée: ${positionData['id']}');
     } catch (e) {
       throw Exception('Échec sync position: $e');

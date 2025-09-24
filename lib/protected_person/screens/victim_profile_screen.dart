@@ -63,15 +63,16 @@ class _VictimProfileScreenState extends State<VictimProfileScreen> {
       if (userId != null) {
         final response = await SupabaseService.instance.select(
           'utilisateurs',
-          columns: 'id, prenom, nom, telephone, email, type_compte, date_creation',
+          // aligner sur colonnes existantes
+          columns: 'id, prenom, pseudo, num_tel, email, type_utilisateur, date_creation',
           filters: {'id': userId}
         );
         
         if (response.isNotEmpty) {
           _userProfile = response.first;
           _firstNameController.text = _userProfile!['prenom'] ?? '';
-          _lastNameController.text = _userProfile!['nom'] ?? '';
-          _phoneController.text = _userProfile!['telephone'] ?? '';
+          _lastNameController.text = _userProfile!['pseudo'] ?? '';
+          _phoneController.text = _userProfile!['num_tel'] ?? '';
           _emailController.text = _userProfile!['email'] ?? '';
         }
       }
@@ -341,30 +342,31 @@ class _VictimProfileScreenState extends State<VictimProfileScreen> {
                ),
              ),
              const SizedBox(width: 12),
-             Column(
-               crossAxisAlignment: CrossAxisAlignment.start,
-               children: [
-                 Text(
-                   'Mon Profil',
-                   style: TextStyle(
-                     color: Colors.white,
-                     fontWeight: FontWeight.bold,
-                     fontSize: 18,
-                   ),
-                 ),
-                                   Flexible(
-                    child: Text(
-                      'Gérez vos informations',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.8),
-                        fontSize: 11,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
+            Flexible(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Mon Profil',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
                     ),
                   ),
-               ],
-             ),
+                  Text(
+                    'Gérez vos informations',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.8),
+                      fontSize: 11,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                ],
+              ),
+            ),
            ],
          ),
          backgroundColor: AppConstants.primaryColor,

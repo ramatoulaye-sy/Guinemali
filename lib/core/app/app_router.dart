@@ -17,7 +17,7 @@ import '../../protected_person/screens/victim_history_screen.dart';
 import '../../protected_person/screens/victim_settings_screen.dart';
 import '../../protected_person/screens/victim_help_screen.dart';
 import '../../protected_person/screens/victim_profile_screen.dart';
-import '../../protected_person/screens/victim_forum_screen.dart';
+import '../../protected_person/screens/community_forum_screen.dart';
 import '../../protected_person/screens/victim_map_screen.dart';
 import '../../protected_person/screens/permissions_page.dart';
 import '../../protected_person/screens/victim_security_screen.dart';
@@ -61,6 +61,11 @@ class AppRouter {
 
       // Ne jamais bloquer l'accès à l'écran d'alerte active
       if (currentRoute == AppConstants.routeVictimActiveAlert) {
+        return null;
+      }
+
+      // Éviter toute redirection quand on est déjà sur une route victime
+      if (isLoggedIn && currentRoute.startsWith('/victim/')) {
         return null;
       }
 
@@ -205,11 +210,11 @@ class AppRouter {
         builder: (context, state) => const VictimProfileScreen(),
       ),
       
-      // Route de l'écran du forum
+      // Route de l'écran du forum communautaire (nouvelle version)
       GoRoute(
         path: AppConstants.routeVictimForum,
         name: 'victim_forum',
-        builder: (context, state) => const VictimForumScreen(),
+        builder: (context, state) => const CommunityForumScreen(),
       ),
       
       // Route de la carte GPS temps réel (OSM)

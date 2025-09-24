@@ -134,6 +134,8 @@ class SupabaseService {
     String? orderBy,
     bool ascending = true,
     int? limit,
+    int? rangeFrom,
+    int? rangeTo,
   }) async {
     try {
       await SupabaseService.ensureInitialized();
@@ -142,7 +144,27 @@ class SupabaseService {
       // Appliquer les filtres
       if (filters != null) {
         filters.forEach((key, value) {
-          query = query.eq(key, value);
+          if (key.endsWith('__lt')) {
+            final k = key.replaceAll('__lt', '');
+            query = query.lt(k, value);
+          } else if (key.endsWith('__lte')) {
+            final k = key.replaceAll('__lte', '');
+            query = query.lte(k, value);
+          } else if (key.endsWith('__gt')) {
+            final k = key.replaceAll('__gt', '');
+            query = query.gt(k, value);
+          } else if (key.endsWith('__gte')) {
+            final k = key.replaceAll('__gte', '');
+            query = query.gte(k, value);
+          } else if (key.endsWith('__neq')) {
+            final k = key.replaceAll('__neq', '');
+            query = query.neq(k, value);
+          } else if (key.endsWith('__in')) {
+            final k = key.replaceAll('__in', '');
+            query = query.in_(k, value as List);
+          } else {
+            query = query.eq(key, value);
+          }
         });
       }
 
@@ -157,9 +179,12 @@ class SupabaseService {
         query = query.order(orderBy, ascending: ascending);
       }
 
-      // Appliquer la limite
+      // Appliquer la limite / range
       if (limit != null) {
         query = query.limit(limit);
+      }
+      if (rangeFrom != null && rangeTo != null) {
+        query = query.range(rangeFrom, rangeTo);
       }
 
       final response = await query;
@@ -190,6 +215,29 @@ class SupabaseService {
       return response;
     } catch (e) {
       print('❌ Erreur INSERT sur $table: $e');
+      rethrow;
+    }
+  }
+
+  /// Exécute une requête UPSERT (insert ou update) avec gestion de conflit
+  Future<dynamic> upsert(
+    String table,
+    Map<String, dynamic> data, {
+    String? onConflict,
+    bool ignoreDuplicates = true,
+  }) async {
+    try {
+      await SupabaseService.ensureInitialized();
+      final response = await client
+          .from(table)
+          .upsert(data, onConflict: onConflict, ignoreDuplicates: ignoreDuplicates)
+          .select();
+
+      print('✅ UPSERT réussi sur $table');
+
+      return response;
+    } catch (e) {
+      print('❌ Erreur UPSERT sur $table: $e');
       rethrow;
     }
   }
