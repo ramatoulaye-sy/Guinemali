@@ -57,9 +57,10 @@ class _VictimHistoryScreenState extends State<VictimHistoryScreen> {
     }).toList();
 
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Historique des Alertes'),
-        backgroundColor: Colors.red.shade600,
+        title: const Text('Historique des Alertes', style: TextStyle(color: Colors.white)),
+        backgroundColor: AppConstants.primaryColor,
         foregroundColor: Colors.white,
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: _loadAlerts),
@@ -91,7 +92,7 @@ class _VictimHistoryScreenState extends State<VictimHistoryScreen> {
                 const Divider(height: 1),
                 Expanded(
                   child: filtered.isEmpty
-                      ? const Center(child: Text('Aucune alerte'))
+                      ? const Center(child: Text('Aucune alerte', style: TextStyle(color: Colors.black54)))
                       : ListView.separated(
                           itemCount: filtered.length,
                           separatorBuilder: (_, __) => const Divider(height: 1),
@@ -106,11 +107,11 @@ class _VictimHistoryScreenState extends State<VictimHistoryScreen> {
                             final id = a['id'] ?? '';
                             return ListTile(
                               leading: CircleAvatar(
-                                backgroundColor: status == 'active' ? Colors.red : Colors.grey,
-                                child: const Icon(Icons.emergency, color: Colors.white),
+                                backgroundColor: status == 'active' ? AppConstants.secondaryColor : Colors.grey.shade300,
+                                child: Icon(Icons.emergency, color: status == 'active' ? Colors.white : Colors.black54),
                               ),
-                              title: Text('Alerte ${id.toString().substring(0, 6)} • ${fmt.format(date)}'),
-                              subtitle: Text(lat != null && lon != null ? '📍 $lat, $lon' : 'Sans position'),
+                              title: Text('Alerte ${id.toString().substring(0, 6)} • ${fmt.format(date)}', style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w700)),
+                              subtitle: Text(lat != null && lon != null ? '📍 $lat, $lon' : 'Sans position', style: const TextStyle(color: Colors.black54)),
                               trailing: PopupMenuButton<String>(
                                 onSelected: (v) async {
                                   if (v == 'open') {
@@ -243,10 +244,12 @@ class _VictimHistoryScreenState extends State<VictimHistoryScreen> {
   Widget _buildFilterChip(String value, String label) {
     final selected = _selectedFilter == value;
     return ChoiceChip(
-      label: Text(label),
+      label: Text(label, style: TextStyle(color: selected ? Colors.white : AppConstants.primaryColor, fontWeight: FontWeight.w700)),
       selected: selected,
       onSelected: (_) => setState(() => _selectedFilter = value),
-      selectedColor: Colors.red.shade100,
+      selectedColor: AppConstants.primaryColor,
+      backgroundColor: Colors.white,
+      shape: StadiumBorder(side: BorderSide(color: AppConstants.primaryColor)),
     );
   }
 }

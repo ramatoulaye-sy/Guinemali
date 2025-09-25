@@ -31,6 +31,8 @@ class AppConstants {
   static const String routeVictimHelp = '/victim/help';
   static const String routeVictimProfile = '/victim/profile';
   static const String routeVictimForum = '/victim/forum';
+  static const String routeVictimResources = '/victim/resources';
+  static const String routeVictimNGO = '/victim/ngo';
   static const String routeVictimRecordEvidence = '/victim/record-evidence';
   static const String routePermissions = '/victim/permissions';
   static const String routeVictimSecurity = '/victim/security';

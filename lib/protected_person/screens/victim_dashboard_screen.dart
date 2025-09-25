@@ -17,7 +17,6 @@ import '../widgets/menu_modal.dart';
 import '../../shared/screens/app_lock_screen.dart';
 import '../../core/services/security_service.dart';
 import '../../core/services/local_push_service.dart';
-import './victim_active_alert_screen.dart';
 
 /// Écran d'accueil principal avec dashboard complet
 class VictimDashboardScreen extends StatefulWidget {
@@ -87,6 +86,34 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
     _startStatusMonitoring();
   }
   
+  Widget _buildDialogAction({required IconData icon, required String label, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Ink(
+        decoration: BoxDecoration(
+          color: const Color(0xFFee82ee).withOpacity(0.15),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 4))],
+          border: Border.all(color: const Color(0xFFee82ee).withOpacity(0.35)),
+        ),
+        child: Center(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(width: 6),
+              Icon(icon, color: Colors.white, size: 18),
+              const SizedBox(width: 8),
+              const Text(' ', style: TextStyle(fontSize: 0)),
+              Flexible(child: Text(label, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600))),
+              const SizedBox(width: 6),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Démarre la surveillance des statuts en temps réel
   void _startStatusMonitoring() {
     _statusTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
@@ -293,7 +320,7 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Icône profil
+              // Icône profil → photo URL
               GestureDetector(
                 onTap: () => _showProfileOptions(user),
                 child: Container(
@@ -307,10 +334,14 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
                       width: 1,
                     ),
                   ),
-                  child: const Icon(
-                    Icons.person_outline,
-                    color: Colors.white,
-                    size: 18,
+                  child: ClipOval(
+                    child: (user?.photoUrl != null && (user!.photoUrl!.isNotEmpty))
+                        ? Image.network(
+                            user.photoUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => const Icon(Icons.person_outline, color: Colors.white, size: 18),
+                          )
+                        : const Icon(Icons.person_outline, color: Colors.white, size: 18),
                   ),
                 ),
               ),
@@ -695,242 +726,86 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
   
   /// Affiche les options du profil utilisateur
   void _showProfileOptions(UserModel? user) {
-    showDialog(
+    showGeneralDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
+      barrierDismissible: true,
+      barrierLabel: 'Profil',
+      barrierColor: Colors.black26,
+      transitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (_, __, ___) {
+        return Center(
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
               decoration: BoxDecoration(
-                color: AppConstants.primaryColor.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xFFee82ee), Color(0xFF945acb)],
+                ),
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 24, offset: const Offset(0, 10))],
               ),
-              child: Icon(
-                Icons.person,
-                color: AppConstants.primaryColor,
-                size: 24,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              'Profil Utilisateur',
-              style: TextStyle(
-                color: AppConstants.primaryColor,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Informations de l'utilisateur
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade50,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: Colors.grey.shade200,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircleAvatar(
+                            radius: 12,
+                            backgroundColor: const Color(0xFF945acb),
+                            backgroundImage: (user?.photoUrl != null && (user!.photoUrl!.isNotEmpty)) ? NetworkImage(user.photoUrl!) : null,
+                            child: (user?.photoUrl == null || user!.photoUrl!.isEmpty) ? const Icon(Icons.person, color: Colors.white, size: 16) : null,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text('Profil Utilisateur', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 18, shadows: [Shadow(color: Colors.black45, blurRadius: 6)])),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 12, offset: const Offset(0, 6))]),
+                        child: Row(children: [
+                          Stack(alignment: Alignment.center, children: [Container(width: 58, height: 58, decoration: BoxDecoration(shape: BoxShape.circle, boxShadow: [BoxShadow(color: const Color(0xFFee82ee).withOpacity(0.5), blurRadius: 16, spreadRadius: 2)])), CircleAvatar(radius: 24, backgroundColor: const Color(0xFF945acb), backgroundImage: (user?.photoUrl != null && (user!.photoUrl!.isNotEmpty)) ? NetworkImage(user.photoUrl!) : null, child: (user?.photoUrl == null || user!.photoUrl!.isEmpty) ? const Icon(Icons.person, color: Colors.white) : null)]),
+                          const SizedBox(width: 12),
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('${user?.prenom ?? 'Prénom'} (${user?.pseudo ?? 'Pseudo'})', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.black87)), const SizedBox(height: 6), InkWell(onTap: () => _composePhone(user?.numTel), child: Row(children: const [Icon(Icons.phone, size: 16, color: Colors.grey), SizedBox(width: 6),])) , Text(user?.numTel ?? 'Non spécifié', style: const TextStyle(color: Colors.black87, decoration: TextDecoration.underline))])),
+                        ]),
+                      ),
+                      const SizedBox(height: 16),
+                      GridView.count(crossAxisCount: 2, mainAxisSpacing: 12, crossAxisSpacing: 12, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), childAspectRatio: 2.8, children: [
+                        _buildDialogAction(icon: Icons.edit, label: 'Modifier le profil', onTap: () { Navigator.of(context).pop(); _navigateToEditProfile(); }),
+                        _buildDialogAction(icon: Icons.settings, label: 'Paramètres', onTap: () { Navigator.of(context).pop(); _navigateToSettings(); }),
+                        _buildDialogAction(icon: Icons.security, label: 'Sécurité', onTap: () { Navigator.of(context).pop(); _navigateToSecurity(); }),
+                        _buildDialogAction(icon: Icons.help_outline, label: 'Aide', onTap: () { Navigator.of(context).pop(); _navigateToHelp(); }),
+                      ]),
+                      const SizedBox(height: 8),
+                      Align(alignment: Alignment.center, child: ElevatedButton(onPressed: () => Navigator.of(context).pop(), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF945acb), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)), elevation: 6, padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12)), child: const Text('Fermer'))),
+                    ],
+                  ),
                 ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.account_circle,
-                        color: AppConstants.primaryColor,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Nom complet',
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${user?.prenom ?? 'Prénom'} (${user?.pseudo ?? 'Pseudo'})',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.phone,
-                        color: AppConstants.primaryColor,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Téléphone',
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    user?.numTel ?? 'Non spécifié',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Colors.black87,
-                    ),
-                  ),
-                ],
-              ),
             ),
-            const SizedBox(height: 16),
-            // Options du profil
-            Text(
-              'Actions disponibles :',
-              style: TextStyle(
-                color: Colors.grey.shade700,
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-              ),
-            ),
-            const SizedBox(height: 8),
-            _buildProfileOption(
-              icon: Icons.edit,
-              title: 'Modifier le profil',
-              subtitle: 'Changer vos informations personnelles',
-              onTap: () {
-                Navigator.of(context).pop();
-                _navigateToEditProfile();
-              },
-            ),
-            _buildProfileOption(
-              icon: Icons.settings,
-              title: 'Paramètres',
-              subtitle: 'Configurer vos préférences',
-              onTap: () {
-                Navigator.of(context).pop();
-                _navigateToSettings();
-              },
-            ),
-            _buildProfileOption(
-              icon: Icons.security,
-              title: 'Sécurité',
-              subtitle: 'Gérer vos mots de passe et sécurité',
-              onTap: () {
-                Navigator.of(context).pop();
-                _navigateToSecurity();
-              },
-            ),
-            _buildProfileOption(
-              icon: Icons.help_outline,
-              title: 'Aide et Support',
-              subtitle: 'Obtenir de l\'aide',
-              onTap: () {
-                Navigator.of(context).pop();
-                _navigateToHelp();
-              },
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Fermer'),
           ),
-        ],
-      ),
+        );
+      },
+      transitionBuilder: (context, anim1, anim2, child) {
+        return Opacity(opacity: anim1.value, child: Transform.scale(scale: 0.98 + 0.02 * anim1.value, child: child));
+      },
     );
   }
   
-  /// Construit une option de profil
-  Widget _buildProfileOption({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: Colors.grey.shade200,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.shade100,
-              blurRadius: 2,
-              spreadRadius: 0,
-              offset: const Offset(0, 1),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppConstants.primaryColor.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                icon,
-                color: AppConstants.primaryColor,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              Icons.arrow_forward_ios,
-              size: 16,
-              color: Colors.grey.shade400,
-            ),
-          ],
-        ),
-      ),
-    );
+  void _composePhone(String? phone) {
+    if (phone == null || phone.isEmpty) return;
+    // Placeholder: ici on pourrait utiliser url_launcher
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Composer: $phone')));
   }
+
+  // _buildProfileOption supprimé (non utilisé)
   
   /// Navigation vers l'édition du profil
   void _navigateToEditProfile() {
@@ -1726,19 +1601,39 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
           opacity: _fadeController.value,
           child: Transform.translate(
             offset: Offset(0, 30 * (1 - _fadeController.value)),
-            child: ElevatedButton.icon(
-              onPressed: () => _navigateToQuickActions(),
-              icon: const Icon(Icons.flash_on),
-              label: const Text('Actions Rapides'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryColor,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(25),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () => _navigateToQuickActions(),
+                  icon: const Icon(Icons.flash_on),
+                  label: const Text('Actions Rapides'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(25),
+                    ),
+                    elevation: 4,
+                  ),
                 ),
-                elevation: 4,
-              ),
+                const SizedBox(height: 12),
+                ElevatedButton.icon(
+                  onPressed: () => _navigateToRealtimeMap(),
+                  icon: const Icon(Icons.map_outlined),
+                  label: const Text('Carte GPS en temps réel'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFee82ee),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(25),
+                    ),
+                    elevation: 4,
+                  ),
+                ),
+              ],
             ),
           ),
         );
@@ -1786,6 +1681,14 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
                 label: 'Forum',
                 index: 2,
                 onTap: () => _navigateToForum(),
+              ),
+            ),
+            Expanded(
+              child: _buildFooterButton(
+                icon: Icons.menu_book,
+                label: 'Ressources',
+                index: 4,
+                onTap: () => _navigateToResources(),
               ),
             ),
             Expanded(
@@ -1870,6 +1773,19 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
     }
   }
 
+  /// Navigation vers la carte GPS temps réel
+  void _navigateToRealtimeMap() {
+    try {
+      // Utilise la route définie dans AppRouter (victim_live_map)
+      context.push(AppConstants.routeVictimLiveMap);
+    } catch (e) {
+      print('❌ Erreur navigation carte: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur navigation: $e')),
+      );
+    }
+  }
+
   /// Affiche la fenêtre modale du menu
   void _showMenuModal() {
     showModalBottomSheet(
@@ -1900,6 +1816,18 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
       print('💬 Navigation vers le forum');
     } catch (e) {
       print('❌ Erreur navigation forum: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur navigation: $e')),
+      );
+    }
+  }
+
+  void _navigateToResources() {
+    try {
+      context.push(AppConstants.routeVictimResources);
+      print('📚 Navigation vers ressources éducatives');
+    } catch (e) {
+      print('❌ Erreur navigation ressources: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Erreur navigation: $e')),
       );

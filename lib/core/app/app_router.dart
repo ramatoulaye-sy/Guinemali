@@ -19,6 +19,8 @@ import '../../protected_person/screens/victim_help_screen.dart';
 import '../../protected_person/screens/victim_profile_screen.dart';
 import '../../protected_person/screens/community_forum_screen.dart';
 import '../../protected_person/screens/victim_map_screen.dart';
+import '../../protected_person/screens/victim_resources_screen.dart';
+import '../../protected_person/screens/victim_ngo_screen.dart';
 import '../../protected_person/screens/permissions_page.dart';
 import '../../protected_person/screens/victim_security_screen.dart';
 import '../test_rpc_functions.dart';
@@ -215,6 +217,20 @@ class AppRouter {
         path: AppConstants.routeVictimForum,
         name: 'victim_forum',
         builder: (context, state) => const CommunityForumScreen(),
+      ),
+
+      // Route des ressources éducatives
+      GoRoute(
+        path: AppConstants.routeVictimResources,
+        name: 'victim_resources',
+        builder: (context, state) => const VictimResourcesScreen(),
+      ),
+
+      // Route écran ONG 24/24
+      GoRoute(
+        path: AppConstants.routeVictimNGO,
+        name: 'victim_ngo',
+        builder: (context, state) => const VictimNGOScreen(),
       ),
       
       // Route de la carte GPS temps réel (OSM)

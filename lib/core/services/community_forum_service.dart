@@ -17,6 +17,8 @@ class ForumPost {
   final Set<String> likedBy;
   final List<ForumComment> comments;
   final String? moderation; // pending | approved | rejected (optionnel)
+  final bool anonymous;
+  final bool hideAvatar;
 
   ForumPost({
     required this.id,
@@ -29,6 +31,8 @@ class ForumPost {
     Set<String>? likedBy,
     List<ForumComment>? comments,
     this.moderation,
+    this.anonymous = false,
+    this.hideAvatar = false,
   })  : likedBy = likedBy ?? <String>{},
         comments = comments ?? <ForumComment>[];
 
@@ -42,6 +46,9 @@ class ForumPost {
         'createdAt': createdAt.toIso8601String(),
         'likedBy': likedBy.toList(),
         'comments': comments.map((c) => c.toJson()).toList(),
+        'moderation': moderation,
+        'anonymous': anonymous,
+        'hideAvatar': hideAvatar,
       };
 
   static ForumPost fromJson(Map<String, dynamic> json) => ForumPost(
@@ -59,6 +66,8 @@ class ForumPost {
             .map((e) => ForumComment.fromJson(e as Map<String, dynamic>))
             .toList(),
         moderation: json['moderation'] as String?,
+        anonymous: json['anonymous'] as bool? ?? false,
+        hideAvatar: json['hideAvatar'] as bool? ?? false,
       );
 }
 
@@ -168,13 +177,19 @@ class CommunityForumService with ChangeNotifier {
       final rows = await SupabaseService.instance.select(
         'forum_posts',
         columns: 'id, author_id, author_name, category, text, medias, created_at, liked_by, comments',
-        orderBy: 'created_at desc',
+        orderBy: 'created_at', ascending: false,
         rangeFrom: from,
         rangeTo: to,
       );
       final fetched = (rows as List).map((e) {
         // Adapter les colonnes supabase -> modèles locaux
-        final medias = ((e['medias'] as List?) ?? []).map((m) => ForumMedia(kind: m['kind'] ?? 'image', localPath: m['localPath'] ?? '')).toList();
+        final mediasList = (e['medias'] as List?) ?? [];
+        final medias = mediasList.map((m) {
+          final Map<String, dynamic> mm = (m as Map).cast<String, dynamic>();
+          final kind = (mm['kind'] ?? 'image').toString();
+          final url = (mm['url'] ?? mm['localPath'] ?? '').toString();
+          return ForumMedia(kind: kind, localPath: url);
+        }).toList();
         final likedBy = {...(((e['liked_by'] as List?) ?? []).cast<String>())};
         final comments = <ForumComment>[]; // à hydrater si besoin
         return ForumPost(
@@ -221,11 +236,17 @@ class CommunityForumService with ChangeNotifier {
         'forum_posts',
         columns: 'id, author_id, author_name, category, text, medias, created_at, liked_by',
         filters: filters,
-        orderBy: 'created_at desc',
+        orderBy: 'created_at', ascending: false,
         limit: limit,
       );
       final fetched = (rows as List).map((e) {
-        final medias = ((e['medias'] as List?) ?? []).map((m) => ForumMedia(kind: m['kind'] ?? 'image', localPath: m['localPath'] ?? '')).toList();
+        final mediasList = (e['medias'] as List?) ?? [];
+        final medias = mediasList.map((m) {
+          final Map<String, dynamic> mm = (m as Map).cast<String, dynamic>();
+          final kind = (mm['kind'] ?? 'image').toString();
+          final url = (mm['url'] ?? mm['localPath'] ?? '').toString();
+          return ForumMedia(kind: kind, localPath: url);
+        }).toList();
         final likedBy = {...(((e['liked_by'] as List?) ?? []).cast<String>())};
         return ForumPost(
           id: e['id'] as String,
@@ -260,6 +281,8 @@ class CommunityForumService with ChangeNotifier {
     required String category,
     required String text,
     required List<ForumMedia> medias,
+    bool anonymous = false,
+    bool hideAvatar = false,
   }) async {
     await _ensureLoaded();
     final post = ForumPost(
@@ -271,6 +294,8 @@ class CommunityForumService with ChangeNotifier {
       medias: medias,
       createdAt: DateTime.now().toUtc(),
       moderation: 'pending',
+      anonymous: anonymous,
+      hideAvatar: hideAvatar,
     );
     _posts.insert(0, post);
     await _persist();
@@ -305,13 +330,15 @@ class CommunityForumService with ChangeNotifier {
       await SupabaseService.instance.upsert('forum_posts', {
         'id': post.id,
         'author_id': post.authorId,
-        'author_name': post.authorName,
+        'author_name': post.anonymous ? 'Anonyme' : post.authorName,
         'category': post.category,
         'text': post.text,
         'medias': remoteMedias,
         'created_at': post.createdAt.toIso8601String(),
         'liked_by': post.likedBy.toList(),
         'moderation': post.moderation ?? 'pending',
+        'anonymous': post.anonymous,
+        'hide_avatar': post.hideAvatar,
       }, onConflict: 'id', ignoreDuplicates: true);
 
       // Mettre à jour le cache local avec les URLs uploadées si besoin
@@ -351,13 +378,24 @@ class CommunityForumService with ChangeNotifier {
   Future<void> toggleLike({required String postId, required String userId}) async {
     await _ensureLoaded();
     final p = _posts.firstWhere((e) => e.id == postId, orElse: () => throw StateError('post introuvable'));
-    if (p.likedBy.contains(userId)) {
+    final wasLiked = p.likedBy.contains(userId);
+    if (wasLiked) {
       p.likedBy.remove(userId);
     } else {
       p.likedBy.add(userId);
     }
     await _persist();
     notifyListeners();
+
+    // Notification Supabase quand un like est ajouté par une autre personne
+    if (!wasLiked && userId != p.authorId) {
+      _notify(kind: 'like',
+        title: 'Nouveau like',
+        message: 'Votre post a reçu un like',
+        postId: p.id,
+        userId: p.authorId,
+      );
+    }
   }
 
   Future<ForumComment> addComment({
@@ -385,6 +423,28 @@ class CommunityForumService with ChangeNotifier {
     }
     await _persist();
     notifyListeners();
+
+    // Notifications: commentaire sur le post, ou réponse à un commentaire
+    if (parentCommentId == null) {
+      if (authorId != p.authorId) {
+        _notify(kind: 'comment',
+          title: 'Nouveau commentaire',
+          message: 'Quelqu’un a commenté votre post',
+          postId: p.id,
+          userId: p.authorId,
+        );
+      }
+    } else {
+      final parent = _findComment(p.comments, parentCommentId);
+      if (parent != null && authorId != parent.authorId) {
+        _notify(kind: 'reply',
+          title: 'Nouvelle réponse',
+          message: 'Quelqu’un a répondu à votre commentaire',
+          postId: p.id,
+          userId: parent.authorId,
+        );
+      }
+    }
     return c;
   }
 
@@ -398,13 +458,23 @@ class CommunityForumService with ChangeNotifier {
     final c = _findComment(p.comments, commentId);
     if (c == null) throw StateError('commentaire introuvable');
     // Toggle optimiste puis persist
-    if (c.likedBy.contains(userId)) {
+    final wasLiked = c.likedBy.contains(userId);
+    if (wasLiked) {
       c.likedBy.remove(userId);
     } else {
       c.likedBy.add(userId);
     }
     notifyListeners();
     await _persist();
+
+    if (!wasLiked && userId != c.authorId) {
+      _notify(kind: 'like',
+        title: 'Votre commentaire a été aimé',
+        message: 'Quelqu’un a aimé votre commentaire',
+        postId: p.id,
+        userId: c.authorId,
+      );
+    }
   }
 
   Future<void> editComment({
@@ -518,6 +588,23 @@ class CommunityForumService with ChangeNotifier {
   Future<void> _persist() async {
     final raw = jsonEncode(_posts.map((e) => e.toJson()).toList());
     await StorageService.instance.saveString(_kPosts, raw);
+  }
+
+  // --- Notifications helper ---
+  void _notify({required String kind, required String title, required String message, required String postId, required String userId}) async {
+    try {
+      await SupabaseService.ensureInitialized();
+      await SupabaseService.instance.insert('notifications', {
+        'kind': kind,
+        'title': title,
+        'message': message,
+        'post_id': postId,
+        'user_id': userId,
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+      });
+    } catch (_) {
+      // silencieux en offline
+    }
   }
 }
 

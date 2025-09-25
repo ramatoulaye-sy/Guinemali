@@ -155,7 +155,14 @@ class _MenuModalState extends State<MenuModal> {
                       ),
                     ),
                     const SizedBox(width: 16),
-                    const Expanded(child: SizedBox()),
+                    Expanded(
+                      child: _buildMenuButton(
+                        icon: Icons.handshake,
+                        label: 'ONG (24/24)',
+                        color: AppTheme.secondaryColor,
+                        onTap: _openONG,
+                      ),
+                    ),
                   ],
                 ),
 
@@ -412,6 +419,16 @@ class _MenuModalState extends State<MenuModal> {
     HapticFeedback.lightImpact();
     Navigator.of(context).pop();
     context.push(AppConstants.routeVictimHistory);
+  }
+
+  void _openONG() {
+    HapticFeedback.lightImpact();
+    Navigator.of(context).pop();
+    try {
+      context.push(AppConstants.routeVictimNGO);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur navigation: $e')));
+    }
   }
 
   void _openEmergencyPlan() {

@@ -35,9 +35,17 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: AppConstants.primaryColor,
-        brightness: Brightness.light,
+      colorScheme: const ColorScheme.light(
+        primary: AppConstants.primaryColor,
+        secondary: AppConstants.secondaryColor,
+        surface: Colors.white,
+        background: Colors.white,
+        error: AppConstants.errorColor,
+        onPrimary: Colors.white,
+        onSecondary: Colors.white,
+        onSurface: Colors.black87,
+        onBackground: Colors.black87,
+        onError: Colors.white,
       ),
       appBarTheme: const AppBarTheme(
         backgroundColor: AppConstants.primaryColor,
@@ -89,9 +97,17 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: AppConstants.primaryColor,
-        brightness: Brightness.dark,
+      colorScheme: const ColorScheme.dark(
+        primary: AppConstants.primaryColor,
+        secondary: AppConstants.secondaryColor,
+        surface: Colors.black,
+        background: Colors.black,
+        error: AppConstants.errorColor,
+        onPrimary: Colors.white,
+        onSecondary: Colors.white,
+        onSurface: Colors.white,
+        onBackground: Colors.white,
+        onError: Colors.white,
       ),
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.grey[900],

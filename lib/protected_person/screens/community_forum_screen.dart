@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/services/supabase_service.dart';
 import 'dart:io';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
@@ -11,7 +12,7 @@ import '../../core/constants/app_constants.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/services/community_forum_service.dart';
-import '../../core/services/supabase_service.dart';
+// duplicate removed
 import '../../core/services/storage_service.dart';
 import 'dart:convert';
 
@@ -44,9 +45,11 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> with Ticker
   static const int _pageSize = 20;
   int _page = 1;
   bool _isLoadingMore = false;
+  DateTime _lastLoadMore = DateTime.fromMillisecondsSinceEpoch(0);
   bool _notificationsDisabled = false;
   final GlobalKey _titleKey = GlobalKey();
   RealtimeChannel? _notifChannel;
+  String? _profileUrl;
 
   @override
   void initState() {
@@ -55,6 +58,7 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> with Ticker
     _fabScale = CurvedAnimation(parent: _fabCtrl, curve: Curves.elasticOut);
     WidgetsBinding.instance.addPostFrameCallback((_) => _fabCtrl.forward());
     _loadUnreadCount();
+    _loadProfilePhoto();
     // Temps réel notifications
     try {
       SupabaseService.ensureInitialized().then((_) {
@@ -75,6 +79,30 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> with Ticker
     _headerFade = CurvedAnimation(parent: _headerCtrl, curve: Curves.easeOut);
     WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) _headerCtrl.forward(); });
   }
+  Future<void> _loadProfilePhoto() async {
+    try {
+      await SupabaseService.ensureInitialized();
+      final userId = SupabaseService.instance.currentUserId;
+      if (userId == null) return;
+      final rows = await SupabaseService.instance.select(
+        'utilisateurs',
+        columns: 'photo_url, avatar_url, image_url',
+        filters: {'id': userId},
+        limit: 1,
+      );
+      if (rows is List && rows.isNotEmpty) {
+        final m = rows.first as Map<String, dynamic>;
+        final url = (m['photo_url']?.toString() ?? '').isNotEmpty
+            ? m['photo_url'].toString()
+            : (m['avatar_url']?.toString() ?? '').isNotEmpty
+                ? m['avatar_url'].toString()
+                : (m['image_url']?.toString() ?? '').isNotEmpty
+                    ? m['image_url'].toString()
+                    : null;
+        if (mounted) setState(() => _profileUrl = url);
+      }
+    } catch (_) {}
+  }
   Future<void> _loadUnreadCount() async {
     if (_notificationsDisabled) return;
     try {
@@ -82,7 +110,7 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> with Ticker
       final rows = await SupabaseService.instance.select(
         'notifications',
         columns: 'id, is_read, read, read_at',
-        orderBy: 'created_at desc',
+        orderBy: 'created_at', ascending: false,
         limit: 50,
       );
       final list = (rows as List).cast<Map<String, dynamic>>();
@@ -106,7 +134,7 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> with Ticker
       ),
     );
     if (result != null) {
-      setState(() {
+          setState(() {
         _searchQuery = (result['query'] as String).trim();
         _selectedIndex = result['index'] as int;
       });
@@ -145,7 +173,7 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> with Ticker
             opacity: _headerFade,
             child: _Header(
           displayName: user?.prenom ?? 'Invitée',
-          profileUrl: null,
+          profileUrl: (user?.photoUrl != null && (user!.photoUrl!.isNotEmpty)) ? user.photoUrl : _profileUrl,
           onChat: _openChat,
           onSearch: _openSearch,
           onNotifications: () async {
@@ -245,7 +273,7 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> with Ticker
                         }
                         return const _InfiniteLoader();
                       }
-                      return _PostCard(post: visible[i], index: i);
+                      return _AnimatedPostCard(child: _PostCard(post: visible[i], index: i), index: i);
                     },
                     separatorBuilder: (_, __) => const SizedBox(height: 12),
                     itemCount: hasMore ? visible.length + 1 : visible.length,
@@ -263,7 +291,7 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> with Ticker
             backgroundColor: const Color(0xFF945acb),
             foregroundColor: Colors.white,
             icon: const Icon(Icons.add),
-            label: const Text('+ Nouveau post'),
+            label: const Text('Nouveau post'),
             onPressed: () => _openComposer(context),
           ),
         ),
@@ -297,6 +325,8 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> with Ticker
               category: payload.category,
               text: payload.text,
               medias: payload.medias,
+              anonymous: payload.anonymous,
+              hideAvatar: payload.hideAvatar,
             );
           }),
         );
@@ -305,9 +335,12 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> with Ticker
   }
 
   void _maybeLoadMore() {
+    final now = DateTime.now();
     if (_isLoadingMore) return;
+    if (now.difference(_lastLoadMore).inMilliseconds < 500) return; // throttle
+    _lastLoadMore = now;
     setState(() { _isLoadingMore = true; _page += 1; });
-    Future.delayed(const Duration(milliseconds: 150), () {
+    Future.delayed(const Duration(milliseconds: 200), () {
       if (mounted) setState(() { _isLoadingMore = false; });
     });
   }
@@ -393,7 +426,7 @@ class _FeedAudioState extends State<_FeedAudio> {
     try {
       if (_isUrl(widget.path)) {
         await _player.setSource(UrlSource(widget.path));
-      } else {
+    } else {
         await _player.setSource(DeviceFileSource(widget.path));
       }
       if (_dur == Duration.zero) {
@@ -458,11 +491,11 @@ class _Header extends StatelessWidget {
       leading: IconButton(
         icon: const Icon(Icons.arrow_back, color: Colors.white),
         onPressed: () {
-          if (Navigator.of(context).canPop()) {
-            Navigator.of(context).pop();
-          } else {
-            context.go(AppConstants.routeVictimDashboard);
-          }
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        } else {
+          context.go(AppConstants.routeVictimDashboard);
+        }
         },
       ),
       titleSpacing: 0,
@@ -507,8 +540,8 @@ class _Header extends StatelessWidget {
         ),
         Stack(
           clipBehavior: Clip.none,
-          children: [
-            IconButton(
+              children: [
+                IconButton(
               key: notificationsKey,
               icon: const Icon(Icons.notifications_none, color: Colors.white),
               onPressed: onNotifications,
@@ -530,17 +563,17 @@ class _Header extends StatelessWidget {
                     style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
                   ),
                 ),
-              ),
-          ],
-        ),
+                              ),
+                            ],
+                          ),
         const SizedBox(width: 4),
         GestureDetector(
           onTap: onProfile,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
+                      child: Row(
               mainAxisSize: MainAxisSize.min,
-              children: [
+                        children: [
                 CircleAvatar(
                   radius: 16,
                   backgroundColor: const Color(0xFFee82ee),
@@ -554,20 +587,20 @@ class _Header extends StatelessWidget {
                 const SizedBox(width: 6),
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 100),
-                  child: Text(
+                            child: Text(
                     displayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      color: Colors.white,
+                                color: Colors.white,
                       fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-        ),
       ],
     );
   }
@@ -622,10 +655,10 @@ class _SearchPageState extends State<SearchPage> {
               spacing: 8,
               children: [
                 for (int i = 0; i < widget.categories.length; i++)
-                  ChoiceChip(
-                    label: Text(widget.categories[i]),
+                  _SearchPill(
+                    label: widget.categories[i],
                     selected: _index == i,
-                    onSelected: (_) => setState(() => _index = i),
+                    onTap: () => setState(() => _index = i),
                   ),
               ],
             ),
@@ -650,6 +683,31 @@ class _SearchPageState extends State<SearchPage> {
             )
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SearchPill extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _SearchPill({Key? key, required this.label, required this.selected, required this.onTap}) : super(key: key);
+  @override
+  Widget build(BuildContext context) {
+    const Color primary = Color(0xFF945acb);
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? primary : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: primary, width: 1.2),
+          boxShadow: selected ? [BoxShadow(color: primary.withOpacity(0.25), blurRadius: 8, offset: const Offset(0,2))] : null,
+        ),
+        child: Text(label, style: TextStyle(color: selected ? Colors.white : primary, fontWeight: FontWeight.w700)),
       ),
     );
   }
@@ -734,9 +792,71 @@ class _InfiniteLoader extends StatelessWidget {
   const _InfiniteLoader({Key? key}) : super(key: key);
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 12),
-      child: Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: const [
+          _SkeletonDot(),
+          SizedBox(width: 8),
+          _SkeletonDot(delayMs: 120),
+          SizedBox(width: 8),
+          _SkeletonDot(delayMs: 240),
+        ],
+      ),
+    );
+  }
+}
+
+class _SkeletonDot extends StatefulWidget {
+  final int delayMs;
+  const _SkeletonDot({Key? key, this.delayMs = 0}) : super(key: key);
+  @override
+  State<_SkeletonDot> createState() => _SkeletonDotState();
+}
+
+class _SkeletonDotState extends State<_SkeletonDot> with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+  late final Animation<double> _scale;
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 700));
+    _scale = Tween(begin: 0.6, end: 1.0).animate(CurvedAnimation(parent: _c, curve: Curves.easeInOut));
+    Future.delayed(Duration(milliseconds: widget.delayMs), () {
+      if (mounted) _c.repeat(reverse: true);
+    });
+  }
+  @override
+  void dispose() { _c.dispose(); super.dispose(); }
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(
+      scale: _scale,
+      child: Container(
+        width: 8,
+        height: 8,
+        decoration: BoxDecoration(color: const Color(0xFF945acb).withOpacity(0.6), shape: BoxShape.circle),
+      ),
+    );
+  }
+}
+
+class _AnimatedPostCard extends StatelessWidget {
+  final Widget child;
+  final int index;
+  const _AnimatedPostCard({Key? key, required this.child, required this.index}) : super(key: key);
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOut,
+      tween: Tween(begin: 0.96, end: 1.0),
+      builder: (context, value, c) => Transform.translate(
+        offset: Offset(0, (1 - value) * 14),
+        child: Transform.scale(scale: value, child: Opacity(opacity: value, child: c)),
+      ),
+      child: child,
     );
   }
 }
@@ -762,7 +882,7 @@ class _NotificationsSheetState extends State<_NotificationsSheet> {
       final rows = await SupabaseService.instance.select(
         'notifications',
         columns: 'id, kind, title, message, created_at, is_read, read, read_at',
-        orderBy: 'created_at desc',
+        orderBy: 'created_at', ascending: false,
         limit: 20,
       );
       setState(() {
@@ -882,10 +1002,13 @@ class _NotificationsPageState extends State<NotificationsPage> {
   Future<void> _load() async {
     try {
       await SupabaseService.ensureInitialized();
+      final userId = SupabaseService.instance.currentUserId;
       final rows = await SupabaseService.instance.select(
         'notifications',
-        columns: 'id, kind, title, message, created_at, is_read, read, read_at',
-        orderBy: 'created_at desc',
+        columns: 'id, kind, title, message, post_id, created_at, is_read, read, read_at, user_id',
+        filters: userId == null ? null : {'user_id': userId},
+        orderBy: 'created_at',
+        ascending: false,
         limit: 50,
       );
       setState(() { _items = (rows as List).cast<Map<String, dynamic>>(); _loading = false; });
@@ -1091,9 +1214,9 @@ class _AnonHelpModalState extends State<_AnonHelpModal> {
                     child: Container(
                       margin: const EdgeInsets.symmetric(vertical: 4),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
+      decoration: BoxDecoration(
                         color: mine ? const Color(0xFF945acb) : Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
                         m['text'] ?? '',
@@ -1107,7 +1230,7 @@ class _AnonHelpModalState extends State<_AnonHelpModal> {
             const SizedBox(height: 8),
             Row(
               children: [
-                Expanded(
+          Expanded(
                   child: TextField(
                     controller: _text,
                     decoration: const InputDecoration(hintText: 'Écrire...', border: OutlineInputBorder()),
@@ -1192,14 +1315,14 @@ class _CategoriesBar extends StatelessWidget {
               onTap: () => onSelected(i),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                decoration: BoxDecoration(
+      decoration: BoxDecoration(
                   color: selected ? selBg : unselBg,
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(color: primary, width: 1),
                   boxShadow: selected ? [BoxShadow(color: primary.withOpacity(0.35), blurRadius: 8, offset: const Offset(0,2))] : null,
-                ),
-                child: Row(
-                  children: [
+      ),
+      child: Row(
+        children: [
                     if (icon != null) ...[
                       Icon(icon, size: 18, color: selected ? Colors.white : primary),
                       const SizedBox(width: 6),
@@ -1289,16 +1412,23 @@ class _PostCard extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.grey.shade200)),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
-          child: Column(
+      child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+        children: [
             Row(
               children: [
-                CircleAvatar(radius: 16, backgroundColor: const Color(0xFFee82ee), child: const Icon(Icons.person, size: 18, color: Colors.white)),
+                _AvatarOrPlaceholder(post: post),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(post.authorName, style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.black87)),
+                    Text(
+                      post.anonymous ? 'Anonyme' : post.authorName,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: post.anonymous ? const Color(0xFF945acb) : Colors.black87,
+                        fontStyle: post.anonymous ? FontStyle.italic : FontStyle.normal,
+                      ),
+                    ),
                     const SizedBox(height: 2),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -1325,8 +1455,8 @@ class _PostCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFF7E6),
                   border: Border.all(color: const Color(0xFFFFC107)),
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
                 child: Row(
                   children: [
                     const Icon(Icons.shield_outlined, size: 18, color: Color(0xFFFFC107)),
@@ -1337,9 +1467,9 @@ class _PostCard extends StatelessWidget {
                             ? 'En attente de modération'
                             : 'Refusé par la modération',
                         style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w600, fontSize: 12),
-                      ),
-                    ),
-                  ],
+            ),
+          ),
+        ],
                 ),
               ),
             ],
@@ -1540,6 +1670,22 @@ class _MediaGallery extends StatelessWidget {
                     m.localPath,
                     width: double.infinity,
                     fit: BoxFit.fitWidth,
+                    frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                      if (wasSynchronouslyLoaded) return child;
+                      return AnimatedOpacity(
+                        opacity: frame == null ? 0 : 1,
+                        duration: const Duration(milliseconds: 250),
+                        curve: Curves.easeOut,
+                        child: child,
+                      );
+                    },
+                    loadingBuilder: (context, child, progress) {
+                      if (progress == null) return child;
+                      return Container(
+                        color: Colors.grey.shade200,
+                        height: 180,
+                      );
+                    },
                   )
                 : Image.file(
                     File(m.localPath),
@@ -1619,7 +1765,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
         child: Padding(
           padding: EdgeInsets.only(bottom: insets.bottom),
           child: Column(
-            children: [
+          children: [
               const SizedBox(height: 8),
               Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(2))),
               const SizedBox(height: 8),
@@ -1651,13 +1797,13 @@ class _CommentsSheetState extends State<_CommentsSheet> {
               Padding(
                 padding: const EdgeInsets.all(12),
                 child: Row(
-                  children: [
+            children: [
                     Expanded(
                       child: TextField(
                         controller: _text,
                         style: const TextStyle(color: Colors.black87),
                         cursorColor: Color(0xFF945acb),
-                        decoration: InputDecoration(
+              decoration: InputDecoration(
                           hintText: _replyTo == null ? 'Écrire un commentaire...' : 'Répondre...',
                           hintStyle: const TextStyle(color: Colors.black87),
                           isDense: true,
@@ -1843,7 +1989,7 @@ class _CommentTile extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const CircleAvatar(radius: 14, child: Icon(Icons.person, size: 16)),
+        _CommentAuthorAvatar(authorId: comment.authorId, anonymous: false),
         const SizedBox(width: 8),
         Expanded(
           child: Column(
@@ -1883,7 +2029,9 @@ class _ComposerPayload {
   final String category;
   final String text;
   final List<ForumMedia> medias;
-  _ComposerPayload({required this.category, required this.text, required this.medias});
+  final bool anonymous;
+  final bool hideAvatar;
+  _ComposerPayload({required this.category, required this.text, required this.medias, this.anonymous = false, this.hideAvatar = false});
 }
 class _ComposerSheet extends StatefulWidget {
   final void Function(_ComposerPayload payload) onSubmit;
@@ -1899,9 +2047,12 @@ class _ComposerSheetState extends State<_ComposerSheet> with TickerProviderState
   final ImagePicker _picker = ImagePicker();
   final List<_PickedMedia> _medias = [];
   bool _pickerBusy = false;
+  bool _anonymous = false;
+  bool _hideAvatarsInFeed = false;
   // Couleurs de marque (réutilisées dans la déco ci-dessous)
   static const Color _violet = Color(0xFF945acb);
   static const Color _violetSoft = Color(0xFFee82ee);
+  static const Color _onViolet = Colors.white;
   late final AnimationController _bgCtrl;
   late final AnimationController _enterCtrl;
   late final Animation<Offset> _enterSlide;
@@ -1918,6 +2069,11 @@ class _ComposerSheetState extends State<_ComposerSheet> with TickerProviderState
         .animate(CurvedAnimation(parent: _enterCtrl, curve: Curves.easeOut));
     _enterFade = CurvedAnimation(parent: _enterCtrl, curve: Curves.easeOut);
     WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) _enterCtrl.forward(); });
+    // Charger les préférences par défaut (peuvent être écrasées par un brouillon ensuite)
+    try {
+      _anonymous = StorageService.instance.getBool('pref_anonymous_default', defaultValue: false);
+      _hideAvatarsInFeed = StorageService.instance.getBool('pref_hide_avatar_default', defaultValue: false);
+    } catch (_) {}
     _loadDraftIfAny();
   }
 
@@ -1935,7 +2091,7 @@ class _ComposerSheetState extends State<_ComposerSheet> with TickerProviderState
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(bottom: insets.bottom),
-        child: SingleChildScrollView(
+          child: SingleChildScrollView(
           child: AnimatedBuilder(
             animation: _bgCtrl,
             builder: (context, child) {
@@ -1948,7 +2104,7 @@ class _ComposerSheetState extends State<_ComposerSheet> with TickerProviderState
                     colors: [
                       _violet.withOpacity(0.025),
                       Colors.white,
-                      _violetSoft.withOpacity(0.03),
+                      _violetSoft.withOpacity(0.035),
                     ],
                   ),
                 ),
@@ -1993,9 +2149,9 @@ class _ComposerSheetState extends State<_ComposerSheet> with TickerProviderState
               const SizedBox(height: 12),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
+                  child: Row(
                   children: const [
-                    CircleAvatar(radius: 18, backgroundColor: Color(0xFF945acb), child: Icon(Icons.brush, color: Colors.white, size: 18)),
+                    CircleAvatar(radius: 18, backgroundColor: _violet, child: Icon(Icons.brush, color: _onViolet, size: 18)),
                     SizedBox(width: 10),
                     Text('Créer un post', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: Colors.black87)),
                   ],
@@ -2017,6 +2173,16 @@ class _ComposerSheetState extends State<_ComposerSheet> with TickerProviderState
                   _CategoryBadge(label: 'Soutien', color: const Color(0xFF4A90E2), selected: _category == 'Soutien', onTap: () => setState(() => _category = 'Soutien')),
                   _CategoryBadge(label: 'Conseil', color: const Color(0xFF2ECC71), selected: _category == 'Conseil', onTap: () => setState(() => _category = 'Conseil')),
                   _CategoryBadge(label: 'Partage', color: const Color(0xFFF1C40F), selected: _category == 'Partage', onTap: () => setState(() => _category = 'Partage')),
+                  _TogglePill(
+                    label: 'Publier en anonyme',
+                    selected: _anonymous,
+                    onTap: () => setState(() => _anonymous = !_anonymous),
+                  ),
+                  _TogglePill(
+                    label: 'Masquer mon avatar (fil)',
+                    selected: _hideAvatarsInFeed,
+                    onTap: () => setState(() => _hideAvatarsInFeed = !_hideAvatarsInFeed),
+                  ),
                 ],
               ),
             ),
@@ -2032,7 +2198,7 @@ class _ComposerSheetState extends State<_ComposerSheet> with TickerProviderState
                   hintText: 'Exprime-toi librement…',
                   hintStyle: const TextStyle(color: Colors.black54),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF945acb), width: 1.4)),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _violet, width: 1.4)),
                 ),
               ),
             ),
@@ -2057,15 +2223,16 @@ class _ComposerSheetState extends State<_ComposerSheet> with TickerProviderState
               child: LayoutBuilder(builder: (context, c) {
                 final isWide = c.maxWidth > 520;
                 final buttons = <Widget>[
-                  _MediaActionButton(icon: Icons.photo_outlined, label: 'Image', onTap: _pickImageFromGallery),
-                  _MediaActionButton(icon: Icons.videocam_outlined, label: 'Vidéo', onTap: _pickVideoFromGallery),
-                  _MediaActionButton(icon: Icons.photo_camera_outlined, label: 'Caméra', onTap: _capturePhoto),
-                  _MediaActionButton(icon: Icons.mic_none_outlined, label: 'Audio', onTap: _pickAudioFile),
-                  _MediaActionButton(icon: Icons.videocam_rounded, label: 'Vidéo (caméra)', onTap: _captureVideo),
+                  _MediaActionButton(icon: Icons.photo_outlined, label: 'Image', onTap: _pickImageFromGallery, color: _violet, accent: _violetSoft),
+                  _MediaActionButton(icon: Icons.videocam_outlined, label: 'Vidéo', onTap: _pickVideoFromGallery, color: _violet, accent: _violetSoft),
+                  _MediaActionButton(icon: Icons.photo_camera_outlined, label: 'Caméra', onTap: _capturePhoto, color: _violet, accent: _violetSoft),
+                  _MediaActionButton(icon: Icons.mic_none_outlined, label: 'Audio', onTap: _pickAudioFile, color: _violet, accent: _violetSoft),
+                  _MediaActionButton(icon: Icons.videocam_rounded, label: 'Vidéo (caméra)', onTap: _captureVideo, color: _violet, accent: _violetSoft),
                   OutlinedButton(
                     onPressed: _openPreview,
                     style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: const Color(0xFF945acb).withOpacity(0.8), width: 1.1),
+                      side: BorderSide(color: _violet.withOpacity(0.9), width: 1.2),
+                      foregroundColor: _violet,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       minimumSize: const Size(140, 48),
                     ),
@@ -2102,8 +2269,8 @@ class _ComposerSheetState extends State<_ComposerSheet> with TickerProviderState
                   child: ElevatedButton.icon(
                     icon: const Icon(Icons.rocket_launch_rounded),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF945acb),
-                      foregroundColor: Colors.white,
+                      backgroundColor: _violet,
+                      foregroundColor: _onViolet,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                     ),
                     onPressed: () {
@@ -2114,7 +2281,9 @@ class _ComposerSheetState extends State<_ComposerSheet> with TickerProviderState
                         medias: _medias.map((m) => ForumMedia(
                               kind: m.kind.name,
                               localPath: m.xfile?.path ?? m.platformFile?.path ?? '',
-                            )).toList(),
+              )).toList(),
+                        anonymous: _anonymous,
+                        hideAvatar: _hideAvatarsInFeed,
                       );
                       widget.onSubmit(payload);
                       // Clear draft
@@ -2125,9 +2294,9 @@ class _ComposerSheetState extends State<_ComposerSheet> with TickerProviderState
                       );
                     },
                     label: const Text('Publier'),
-                  ),
-                ),
-              ),
+            ),
+          ),
+        ),
             ),
             const SizedBox(height: 20),
           ],
@@ -2152,6 +2321,8 @@ class _ComposerSheetState extends State<_ComposerSheet> with TickerProviderState
       final data = {
         'category': _category,
         'text': _text.text.trim(),
+        'anonymous': _anonymous,
+        'hideAvatarsInFeed': _hideAvatarsInFeed,
         'medias': _medias.map((m) => {
           'kind': m.kind.name,
           'path': m.xfile?.path ?? m.platformFile?.path ?? '',
@@ -2168,6 +2339,8 @@ class _ComposerSheetState extends State<_ComposerSheet> with TickerProviderState
       final map = jsonDecode(raw) as Map<String, dynamic>;
       _category = (map['category'] as String?) ?? 'Tous';
       _text.text = (map['text'] as String?) ?? '';
+      _anonymous = (map['anonymous'] as bool?) ?? false;
+      _hideAvatarsInFeed = (map['hideAvatarsInFeed'] as bool?) ?? false;
       final List medias = (map['medias'] as List?) ?? [];
       for (final m in medias) {
         final kind = m['kind'] as String?;
@@ -2265,9 +2438,9 @@ class _ComposerSheetState extends State<_ComposerSheet> with TickerProviderState
             child: SingleChildScrollView(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Column(
+        child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+          children: [
                     Row(
                       children: const [
                         Icon(Icons.preview, color: Color(0xFF945acb)),
@@ -2298,6 +2471,7 @@ class _ComposerSheetState extends State<_ComposerSheet> with TickerProviderState
                                 category: _category,
                                 text: _text.text.trim(),
                                 medias: _medias.map((m) => ForumMedia(kind: m.kind.name, localPath: m.xfile?.path ?? m.platformFile?.path ?? '')).toList(),
+                                anonymous: _anonymous,
                               );
                               widget.onSubmit(payload);
                               Navigator.of(context).pop();
@@ -2314,6 +2488,80 @@ class _ComposerSheetState extends State<_ComposerSheet> with TickerProviderState
               ),
             ),
           ),
+        );
+      },
+    );
+  }
+}
+
+class _AvatarOrPlaceholder extends StatelessWidget {
+  final ForumPost post;
+  const _AvatarOrPlaceholder({Key? key, required this.post}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    // Si anonyme OU hideAvatar activé, avatar générique
+    if (post.anonymous || post.hideAvatar) {
+      return const CircleAvatar(
+        radius: 16,
+        backgroundColor: Color(0xFFee82ee),
+        child: Icon(Icons.person, size: 18, color: Colors.white),
+      );
+    }
+    return _PostAuthorAvatar(authorId: post.authorId);
+  }
+}
+
+class _PostAuthorAvatar extends StatelessWidget {
+  final String authorId;
+  const _PostAuthorAvatar({Key? key, required this.authorId}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<dynamic>(
+      future: SupabaseService.instance.select('utilisateurs', columns: 'photo_url', filters: {'id': authorId}),
+      builder: (context, snapshot) {
+        final list = snapshot.data as List<dynamic>?;
+        final url = (list != null && list.isNotEmpty)
+            ? (list.first['photo_url'] as String?)
+            : null;
+        return CircleAvatar(
+          radius: 16,
+          backgroundColor: const Color(0xFFee82ee),
+          backgroundImage: (url != null && url.isNotEmpty) ? NetworkImage(url) : null,
+          child: (url == null || url.isEmpty)
+              ? const Icon(Icons.person, size: 18, color: Colors.white)
+              : null,
+        );
+      },
+    );
+  }
+}
+
+class _CommentAuthorAvatar extends StatelessWidget {
+  final String authorId;
+  final bool anonymous;
+  const _CommentAuthorAvatar({Key? key, required this.authorId, required this.anonymous}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    if (anonymous) {
+      return const CircleAvatar(radius: 14, backgroundColor: Color(0xFFee82ee), child: Icon(Icons.person, size: 16, color: Colors.white));
+    }
+    return FutureBuilder<dynamic>(
+      future: SupabaseService.instance.select('utilisateurs', columns: 'photo_url', filters: {'id': authorId}),
+      builder: (context, snapshot) {
+        final list = snapshot.data as List<dynamic>?;
+        final url = (list != null && list.isNotEmpty)
+            ? (list.first['photo_url'] as String?)
+            : null;
+        return CircleAvatar(
+          radius: 14,
+          backgroundColor: const Color(0xFFee82ee),
+          backgroundImage: (url != null && url.isNotEmpty) ? NetworkImage(url) : null,
+          child: (url == null || url.isEmpty)
+              ? const Icon(Icons.person, size: 16, color: Colors.white)
+              : null,
         );
       },
     );
@@ -2363,7 +2611,9 @@ class _MediaActionButton extends StatefulWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  const _MediaActionButton({Key? key, required this.icon, required this.label, required this.onTap}) : super(key: key);
+  final Color color;
+  final Color accent;
+  const _MediaActionButton({Key? key, required this.icon, required this.label, required this.onTap, this.color = const Color(0xFF945acb), this.accent = const Color(0xFFee82ee)}) : super(key: key);
 
   @override
   State<_MediaActionButton> createState() => _MediaActionButtonState();
@@ -2393,20 +2643,20 @@ class _MediaActionButtonState extends State<_MediaActionButton> with SingleTicke
         scale: _scale,
         child: Container(
           height: 48,
-          decoration: BoxDecoration(
+        decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFF945acb), width: 1.2),
+            border: Border.all(color: widget.color, width: 1.2),
             color: Colors.white,
-            boxShadow: [BoxShadow(color: const Color(0xFFee82ee).withOpacity(0.15), blurRadius: 8, offset: const Offset(0,2))],
+            boxShadow: [BoxShadow(color: widget.accent.withOpacity(0.16), blurRadius: 8, offset: const Offset(0,2))],
           ),
           alignment: Alignment.center,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(widget.icon, color: const Color(0xFF945acb)),
+              Icon(widget.icon, color: widget.color),
               const SizedBox(width: 8),
-              Text(widget.label, style: const TextStyle(color: Color(0xFF945acb), fontWeight: FontWeight.w600)),
+              Text(widget.label, style: TextStyle(color: widget.color, fontWeight: FontWeight.w600)),
             ],
           ),
         ),
@@ -2424,6 +2674,31 @@ class _CategoryBadge extends StatefulWidget {
 
   @override
   State<_CategoryBadge> createState() => _CategoryBadgeState();
+}
+
+class _TogglePill extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _TogglePill({Key? key, required this.label, required this.selected, required this.onTap}) : super(key: key);
+  @override
+  Widget build(BuildContext context) {
+    const Color primary = Color(0xFF945acb);
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? primary : Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: primary, width: 1.2),
+          boxShadow: selected ? [BoxShadow(color: primary.withOpacity(0.28), blurRadius: 10, offset: const Offset(0,3))] : null,
+        ),
+        child: Text(label, style: TextStyle(color: selected ? Colors.white : primary, fontWeight: FontWeight.w700)),
+      ),
+    );
+  }
 }
 
 class _CategoryBadgeState extends State<_CategoryBadge> with SingleTickerProviderStateMixin {
@@ -2605,7 +2880,7 @@ class _AudioPreviewTileState extends State<_AudioPreviewTile> {
               if (_playing) {
                 await _player.pause();
                 setState(() => _playing = false);
-              } else {
+    } else {
                 try {
                   await _ensureSource();
                   await _player.play(_isUrl(widget.path) ? UrlSource(widget.path) : DeviceFileSource(widget.path));

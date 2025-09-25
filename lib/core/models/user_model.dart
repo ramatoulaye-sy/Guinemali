@@ -4,6 +4,7 @@ class UserModel {
   final String id;
   final String prenom;
   final String pseudo;
+  final String? photoUrl;
   final String? pinChiffre;
   final String? numTel;
   final String langue;
@@ -18,6 +19,7 @@ class UserModel {
     required this.id,
     required this.prenom,
     required this.pseudo,
+    this.photoUrl,
     this.pinChiffre,
     this.numTel,
     this.langue = 'fr',
@@ -35,6 +37,7 @@ class UserModel {
       id: json['id'] as String,
       prenom: json['prenom'] as String,
       pseudo: json['pseudo'] as String,
+      photoUrl: json['photo_url'] as String?,
       pinChiffre: json['pin_chiffre'] as String?,
       numTel: json['num_tel'] as String?,
       langue: json['langue'] as String? ?? 'fr',
@@ -55,6 +58,7 @@ class UserModel {
       'id': id,
       'prenom': prenom,
       'pseudo': pseudo,
+      'photo_url': photoUrl,
       'pin_chiffre': pinChiffre,
       'num_tel': numTel,
       'langue': langue,
@@ -72,6 +76,7 @@ class UserModel {
     String? id,
     String? prenom,
     String? pseudo,
+    String? photoUrl,
     String? pinChiffre,
     String? numTel,
     String? langue,
@@ -86,6 +91,7 @@ class UserModel {
       id: id ?? this.id,
       prenom: prenom ?? this.prenom,
       pseudo: pseudo ?? this.pseudo,
+      photoUrl: photoUrl ?? this.photoUrl,
       pinChiffre: pinChiffre ?? this.pinChiffre,
       numTel: numTel ?? this.numTel,
       langue: langue ?? this.langue,
