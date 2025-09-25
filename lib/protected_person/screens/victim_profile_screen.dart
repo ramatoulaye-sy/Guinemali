@@ -478,6 +478,13 @@ class _VictimProfileScreenState extends State<VictimProfileScreen> with SingleTi
           _photoUrl = publicUrl;
           _isImageLoading = false;
         });
+        try {
+          // Mettre à jour l'utilisateur courant et mettre en cache local
+          final authProvider = context.read<AuthProvider>();
+          // Rafraîchir l'utilisateur depuis la source (et l'UI lira le cache local immédiatement)
+          await authProvider.refreshUser();
+          await StorageService.instance.saveString('profile_photo_url', publicUrl);
+        } catch (_) {}
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('✅ Photo de profil mise à jour')),
         );

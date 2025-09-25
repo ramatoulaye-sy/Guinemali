@@ -71,9 +71,25 @@ class EmergencyContactService {
       statusText.value = 'Préparation…';
 
       // Préparer un message SMS (inclure localisation si possible)
+      // Priorité: customMessage param -> message paramétré utilisateur -> ancien template fallback
+      final customSosMessage = StorageService.instance.getString('custom_sos_message');
+      final emergencyTemplate = StorageService.instance.getString('emergency_message_template');
+      
+      if (AppConstants.enableLogging) {
+        print('🔍 Debug SMS:');
+        print('  - customMessage param: $customMessage');
+        print('  - custom_sos_message: $customSosMessage');
+        print('  - emergency_message_template: $emergencyTemplate');
+      }
+      
       String template = customMessage ??
-          (StorageService.instance.getString('emergency_message_template') ??
-              'Alerte SOS – j\'ai besoin d\'aide.\nMa position: {lat},{lon}\n{link}');
+          (customSosMessage?.isNotEmpty == true ? customSosMessage : null) ??
+          (emergencyTemplate?.isNotEmpty == true ? emergencyTemplate : null) ??
+          'Alerte SOS – j\'ai besoin d\'aide.\nMa position: {lat},{lon}\n{link}';
+      
+      if (AppConstants.enableLogging) {
+        print('📱 Template SMS final utilisé: $template');
+      }
       String message = template;
       try {
         final pos = await GeolocationService.instance.getLastKnownPosition() 
@@ -81,10 +97,17 @@ class EmergencyContactService {
         final lat = pos.latitude.toStringAsFixed(6);
         final lon = pos.longitude.toStringAsFixed(6);
         final mapsUrl = 'https://maps.google.com/?q=$lat,$lon';
-        message = template
+        // Remplacer placeholders si présents, sinon injecter la position à la fin
+        final replaced = template
           .replaceAll('{lat}', lat)
           .replaceAll('{lon}', lon)
           .replaceAll('{link}', mapsUrl);
+        if (replaced == template) {
+          // pas de placeholders, on ajoute un bloc position lisible
+          message = '${template.trim()}\n\nMa position: $lat,$lon\n$mapsUrl';
+        } else {
+          message = replaced;
+        }
       } catch (_) {
         // pas de localisation, garder message simple
       }

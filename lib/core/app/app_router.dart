@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../services/security_service.dart';
 import '../constants/app_constants.dart';
 import '../../shared/screens/welcome_screen.dart';
 import '../../shared/screens/login_screen.dart';
@@ -23,6 +24,7 @@ import '../../protected_person/screens/victim_resources_screen.dart';
 import '../../protected_person/screens/victim_ngo_screen.dart';
 import '../../protected_person/screens/permissions_page.dart';
 import '../../protected_person/screens/victim_security_screen.dart';
+import '../../shared/screens/app_lock_screen.dart';
 import '../test_rpc_functions.dart';
 
 /// Configuration centralisée du routeur de l'application
@@ -78,7 +80,10 @@ class AppRouter {
       }
 
       // App lock: si une méthode est configurée, demander le déverrouillage au premier accès protégé
-      // Remarque: garde simple, l'écran de verrouillage devrait être appelé depuis les écrans protégés
+      // Implémentation légère: on intercepte ici l'accès au dashboard et on pousse un lock screen modal
+      if (isLoggedIn && _isProtectedRoute(currentRoute)) {
+        _maybeRequireAppLock(context);
+      }
 
       // Si l'utilisateur est connecté et sur la page d'accueil, le rediriger vers son dashboard
       if (isLoggedIn && currentRoute == AppConstants.routeWelcome) {
@@ -104,6 +109,36 @@ class AppRouter {
       AppConstants.routeAdminHome,
     ];
     return protectedRoutes.any((protectedRoute) => route.startsWith(protectedRoute));
+  }
+
+  static bool _lockShown = false;
+  static Future<void> _maybeRequireAppLock(BuildContext context) async {
+    if (_lockShown) return;
+    _lockShown = true;
+    try {
+      final method = await SecurityService.instance.getLockMethod();
+      if (method == AppLockMethod.none) {
+        _lockShown = false;
+        return;
+      }
+      // Afficher le lock screen modale non destructif
+      final ok = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Dialog(
+          insetPadding: EdgeInsets.all(24),
+          child: SizedBox(height: 260, child: AppLockScreen()),
+        ),
+      );
+      // Si annulé ou faux, retourner à l'écran de bienvenue
+      if (ok != true && context.mounted) {
+        context.go(AppConstants.routeWelcome);
+      }
+    } catch (_) {
+      // En cas d'erreur, ne pas bloquer l'utilisateur
+    } finally {
+      _lockShown = false;
+    }
   }
 
   /// Construit toutes les routes de l'application

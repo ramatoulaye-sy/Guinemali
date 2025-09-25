@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import '../constants/app_constants.dart';
 import 'storage_service.dart';
+import 'sync_service.dart';
 
 /// Service de gestion des preuves (audio, vidéo, photos)
 /// S'active automatiquement lors du déclenchement d'une alerte SOS
@@ -278,7 +279,8 @@ class EvidenceService {
       }
 
       if (_cameraController?.value.isInitialized == true) {
-        final directory = await getTemporaryDirectory();
+        // Utiliser le dossier documents pour la persistance
+        final directory = await getApplicationDocumentsDirectory();
         final fileName = 'video_${_currentAlertId}_${DateTime.now().millisecondsSinceEpoch}.mp4';
         _currentVideoPath = '${directory.path}/$fileName';
 
@@ -306,7 +308,11 @@ class EvidenceService {
         final file = await _cameraController!.stopVideoRecording();
         _isRecordingVideo = false;
 
-        _currentVideoPath = file.path;
+        // Déplacer depuis cache vers documents pour persistance
+        final directory = await getApplicationDocumentsDirectory();
+        final targetPath = '${directory.path}/video_${_currentAlertId}_${DateTime.now().millisecondsSinceEpoch}.mp4';
+        await File(file.path).copy(targetPath);
+        _currentVideoPath = targetPath;
 
         if (AppConstants.enableLogging) {
           print('✅ Enregistrement vidéo arrêté: $_currentVideoPath');
@@ -326,14 +332,22 @@ class EvidenceService {
       if (_currentAudioPath != null && File(_currentAudioPath!).existsSync()) {
         final audioFile = File(_currentAudioPath!);
         final audioSize = await audioFile.length();
-        
+        final evidenceId = _uuid.v4();
         await StorageService.instance.saveEvidence(
-          id: _uuid.v4(),
+          id: evidenceId,
           alertId: _currentAlertId!,
           type: 'audio',
           filePath: _currentAudioPath!,
           fileSize: audioSize,
         );
+        // Enfiler pour synchronisation
+        await SyncService.instance.addToSyncQueue('evidence', {
+          'id': evidenceId,
+          'alert_id': _currentAlertId!,
+          'type': 'audio',
+          'file_path': _currentAudioPath!,
+          'file_size': audioSize,
+        });
 
         if (AppConstants.enableLogging) {
           print('✅ Preuve audio sauvegardée: $_currentAudioPath');
@@ -344,14 +358,22 @@ class EvidenceService {
       if (_currentVideoPath != null && File(_currentVideoPath!).existsSync()) {
         final videoFile = File(_currentVideoPath!);
         final videoSize = await videoFile.length();
-        
+        final evidenceId = _uuid.v4();
         await StorageService.instance.saveEvidence(
-          id: _uuid.v4(),
+          id: evidenceId,
           alertId: _currentAlertId!,
           type: 'video',
           filePath: _currentVideoPath!,
           fileSize: videoSize,
         );
+
+        await SyncService.instance.addToSyncQueue('evidence', {
+          'id': evidenceId,
+          'alert_id': _currentAlertId!,
+          'type': 'video',
+          'file_path': _currentVideoPath!,
+          'file_size': videoSize,
+        });
 
         if (AppConstants.enableLogging) {
           print('✅ Preuve vidéo sauvegardée: $_currentVideoPath');
@@ -386,22 +408,36 @@ class EvidenceService {
         final image = await _cameraController!.takePicture();
         
         if (image.path.isNotEmpty) {
-          final photoFile = File(image.path);
+          // Déplacer la photo vers documents pour persistance
+          final docs = await getApplicationDocumentsDirectory();
+          final target = '${docs.path}/photo_${_currentAlertId ?? 'manual'}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+          await File(image.path).copy(target);
+          final photoFile = File(target);
           final photoSize = await photoFile.length();
           
+          final evidenceId = _uuid.v4();
           await StorageService.instance.saveEvidence(
-            id: _uuid.v4(),
+            id: evidenceId,
             alertId: _currentAlertId ?? 'manual',
             type: 'photo',
-            filePath: image.path,
+            filePath: target,
             fileSize: photoSize,
           );
 
+          // Enfiler pour synchronisation
+          await SyncService.instance.addToSyncQueue('evidence', {
+            'id': evidenceId,
+            'alert_id': _currentAlertId ?? 'manual',
+            'type': 'photo',
+            'file_path': target,
+            'file_size': photoSize,
+          });
+
           if (AppConstants.enableLogging) {
-            print('✅ Photo prise et sauvegardée: ${image.path}');
+            print('✅ Photo prise et sauvegardée: $target');
           }
 
-          return image.path;
+          return target;
         }
       } else {
         throw Exception('Caméra non initialisée');
@@ -464,9 +500,8 @@ class EvidenceService {
   /// Récupère toutes les preuves de l'utilisateur
   Future<List<Map<String, dynamic>>> getEvidences() async {
     try {
-      // Pour l'instant, retourner une liste vide
-      // TODO: Implémenter la récupération depuis Supabase
-      return [];
+      final local = await StorageService.instance.getLocalEvidence();
+      return local;
     } catch (e) {
       print('❌ Erreur lors de la récupération des preuves: $e');
       return [];
@@ -480,10 +515,30 @@ class EvidenceService {
     required int duration,
   }) async {
     try {
-      // Pour l'instant, simuler l'enregistrement
-      // TODO: Implémenter l'upload vers Supabase Storage
+      // Sauvegarder localement
+      final file = File(filePath);
+      final size = await file.length();
+      final id = _uuid.v4();
+
+      await StorageService.instance.saveEvidence(
+        id: id,
+        alertId: alertId,
+        type: 'audio',
+        filePath: filePath,
+        fileSize: size,
+      );
+
+      // Enfiler pour synchronisation
+      await SyncService.instance.addToSyncQueue('evidence', {
+        'id': id,
+        'alert_id': alertId,
+        'type': 'audio',
+        'file_path': filePath,
+        'file_size': size,
+      });
+
       return {
-        'id': _uuid.v4(),
+        'id': id,
         'type': 'audio',
         'filePath': filePath,
         'duration': duration,
@@ -499,9 +554,8 @@ class EvidenceService {
   /// Supprime une preuve
   Future<void> deleteEvidence(String evidenceId) async {
     try {
-      // Pour l'instant, simuler la suppression
-      // TODO: Implémenter la suppression depuis Supabase
-      print('🗑️ Suppression de la preuve: $evidenceId');
+      // Supprimer la ligne dans SQLite; le fichier est supprimé côté écran
+      await StorageService.instance.removeEvidence(evidenceId);
     } catch (e) {
       print('❌ Erreur lors de la suppression: $e');
       rethrow;
@@ -511,9 +565,20 @@ class EvidenceService {
   /// Tente de synchroniser toutes les preuves
   Future<int> attemptSyncAll() async {
     try {
-      // Pour l'instant, simuler la synchronisation
-      // TODO: Implémenter la vraie synchronisation
-      return 0;
+      final local = await StorageService.instance.getLocalEvidence();
+      int enqueued = 0;
+      for (final row in local) {
+        if ((row['synced'] ?? 0) == 1) continue;
+        await SyncService.instance.addToSyncQueue('evidence', {
+          'id': row['id'],
+          'alert_id': row['alert_id'],
+          'type': row['type'],
+          'file_path': row['file_path'],
+          'file_size': row['file_size'],
+        });
+        enqueued++;
+      }
+      return enqueued;
     } catch (e) {
       print('❌ Erreur lors de la synchronisation: $e');
       return 0;

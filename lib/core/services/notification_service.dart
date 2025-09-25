@@ -2,6 +2,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 // import 'package:telephony/telephony.dart';  // Plugin abandonné
 import 'package:url_launcher/url_launcher.dart';
 import '../constants/app_constants.dart';
+import 'storage_service.dart';
 
 /// Service de gestion des notifications (locales, SMS, push)
 class NotificationService {
@@ -99,20 +100,33 @@ class NotificationService {
     String? victimName,
   }) async {
     try {
-      final who = (victimName != null && victimName.trim().isNotEmpty)
-          ? victimName.trim()
-          : 'Une personne que vous connaissez';
-      final message = '''🚨 ALERTE GUINÈMALI 🚨
+      // Charger le message personnalisé depuis le stockage
+      final customSosMessage = StorageService.instance.getString('custom_sos_message');
+      final emergencyTemplate = StorageService.instance.getString('emergency_message_template');
 
-$who est en danger et a déclenché une alerte d'urgence.
+      // Choisir le template: priorité au message personnalisé enregistré
+      String template = (customSosMessage?.isNotEmpty == true ? customSosMessage! :
+          (emergencyTemplate?.isNotEmpty == true ? emergencyTemplate! :
+              '🚨 URGENCE – J\'ai besoin d\'aide.\nMa position: {lat},{lon}\n{link}'));
 
-📍 Position: $latitude, $longitude
-🆔 Alerte: $alertId
-⏰ ${DateTime.now().toString()}
+      // Préparer remplacements
+      final latStr = latitude.toStringAsFixed(6);
+      final lonStr = longitude.toStringAsFixed(6);
+      final mapsUrl = 'https://maps.google.com/?q=$latStr,$lonStr';
 
-Merci d'appeler immédiatement et d'aider si vous le pouvez.
+      // Remplacer placeholders si présents; sinon, ajouter à la fin
+      String message = template;
+      if (message.contains('{lat}') || message.contains('{lon}') || message.contains('{link}')) {
+        message = message
+            .replaceAll('{lat}', latStr)
+            .replaceAll('{lon}', lonStr)
+            .replaceAll('{link}', mapsUrl);
+      } else {
+        message = '$message\n\n📍 Position: $latStr, $lonStr\n🔗 $mapsUrl';
+      }
 
-- Guinèmali''';
+      // Ajouter l'identifiant d'alerte et l'horodatage pour le contexte
+      message = '$message\n\n🆔 Alerte: $alertId\n⏰ ${DateTime.now().toString()}';
 
       // Utiliser url_launcher pour envoyer le SMS
       final uri = Uri.parse('sms:$phoneNumber?body=${Uri.encodeComponent(message)}');

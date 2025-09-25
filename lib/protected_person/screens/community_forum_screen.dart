@@ -81,6 +81,15 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> with Ticker
   }
   Future<void> _loadProfilePhoto() async {
     try {
+      // 1) Lire depuis cache local immédiatement pour éviter le flash
+      try {
+        final cached = StorageService.instance.getString('profile_photo_url');
+        if ((cached != null && cached.isNotEmpty) && mounted) {
+          setState(() => _profileUrl = cached);
+        }
+      } catch (_) {}
+
+      // 2) Rafraîchir depuis la base
       await SupabaseService.ensureInitialized();
       final userId = SupabaseService.instance.currentUserId;
       if (userId == null) return;
@@ -99,6 +108,9 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> with Ticker
                 : (m['image_url']?.toString() ?? '').isNotEmpty
                     ? m['image_url'].toString()
                     : null;
+        if (url != null && url.isNotEmpty) {
+          try { await StorageService.instance.saveString('profile_photo_url', url); } catch (_) {}
+        }
         if (mounted) setState(() => _profileUrl = url);
       }
     } catch (_) {}

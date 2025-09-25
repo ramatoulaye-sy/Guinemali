@@ -18,7 +18,7 @@ class StorageService {
   Future<void> initialize() async {
     try {
       // Initialiser SharedPreferences
-      _prefs = await SharedPreferences.getInstance();
+      await _initPrefs();
       
       // Initialiser SQLite
       await _initializeDatabase();
@@ -31,6 +31,13 @@ class StorageService {
         print('❌ Erreur initialisation storage: $e');
       }
       rethrow;
+    }
+  }
+
+  /// Initialise SharedPreferences
+  Future<void> _initPrefs() async {
+    if (_prefs == null) {
+      _prefs = await SharedPreferences.getInstance();
     }
   }
 
@@ -160,12 +167,28 @@ class StorageService {
 
   /// Sauvegarde une chaîne de caractères
   Future<void> saveString(String key, String value) async {
+    if (_prefs == null) {
+      await _initPrefs();
+    }
     await _prefs?.setString(key, value);
+    if (AppConstants.enableLogging) {
+      print('💾 Sauvegarde: $key = "$value"');
+    }
   }
 
   /// Récupère une chaîne de caractères
   String? getString(String key) {
-    return _prefs?.getString(key);
+    if (_prefs == null) {
+      if (AppConstants.enableLogging) {
+        print('⚠️ _prefs null lors de getString($key)');
+      }
+      return null;
+    }
+    final value = _prefs?.getString(key);
+    if (AppConstants.enableLogging && key != 'profile_photo_url') {
+      print('📖 Lecture: $key = "$value"');
+    }
+    return value;
   }
 
   /// Sauvegarde un booléen
@@ -327,14 +350,12 @@ class StorageService {
     }
   }
 
-  /// Récupère les preuves non synchronisées
+  /// Récupère toutes les preuves locales (synchro ou non)
   Future<List<Map<String, dynamic>>> getLocalEvidence() async {
     if (_database == null) return [];
 
     return await _database!.query(
       'local_evidence',
-      where: 'synced = ?',
-      whereArgs: [0],
       orderBy: 'timestamp DESC',
     );
   }
@@ -349,6 +370,21 @@ class StorageService {
       where: 'id = ?',
       whereArgs: [evidenceId],
     );
+  }
+
+  /// Supprime une preuve de la base de données locale
+  Future<void> removeEvidence(String evidenceId) async {
+    if (_database == null) return;
+
+    await _database!.delete(
+      'local_evidence',
+      where: 'id = ?',
+      whereArgs: [evidenceId],
+    );
+
+    if (AppConstants.enableLogging) {
+      print('✅ Preuve supprimée localement: $evidenceId');
+    }
   }
 
   /// Récupère les preuves pour une alerte spécifique

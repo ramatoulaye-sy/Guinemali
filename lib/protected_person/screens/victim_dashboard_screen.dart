@@ -8,7 +8,7 @@ import '../../core/providers/auth_provider.dart';
 import '../../core/services/geolocation_service.dart';
 import '../../core/services/alert_service.dart';
 import '../../core/services/evidence_service.dart';
-import '../../core/services/notification_service.dart';
+import '../../core/services/emergency_contact_service.dart';
 import '../../core/services/storage_service.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -195,19 +195,22 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
             // Header avec logo, nom utilisateur et icônes de statut
             _buildHeader(user),
 
-            // Contenu principal centré
+            // Contenu principal scrollable pour éviter les overflows (clavier/dialogues)
             Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Bouton SOS principal
-                  _buildSOSButton(),
+              child: SingleChildScrollView(
+                padding: EdgeInsets.only(top: 16, bottom: 16 + MediaQuery.of(context).viewInsets.bottom),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Bouton SOS principal
+                    _buildSOSButton(),
 
-                  const SizedBox(height: 32),
+                    const SizedBox(height: 32),
 
-                  // Bouton Actions Rapides
-                  _buildQuickActionsButton(),
-                ],
+                    // Bouton Actions Rapides
+                    _buildQuickActionsButton(),
+                  ],
+                ),
               ),
             ),
           ],
@@ -320,7 +323,7 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Icône profil → photo URL
+              // Icône profil → photo URL (avec cache local immédiat)
               GestureDetector(
                 onTap: () => _showProfileOptions(user),
                 child: Container(
@@ -335,13 +338,20 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
                     ),
                   ),
                   child: ClipOval(
-                    child: (user?.photoUrl != null && (user!.photoUrl!.isNotEmpty))
-                        ? Image.network(
-                            user.photoUrl!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => const Icon(Icons.person_outline, color: Colors.white, size: 18),
-                          )
-                        : const Icon(Icons.person_outline, color: Colors.white, size: 18),
+                    child: Builder(builder: (context) {
+                      final cached = StorageService.instance.getString('profile_photo_url');
+                      final effectiveUrl = (user?.photoUrl != null && user!.photoUrl!.isNotEmpty)
+                          ? user.photoUrl!
+                          : (cached ?? '');
+                      if (effectiveUrl.isNotEmpty) {
+                        return Image.network(
+                          effectiveUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => const Icon(Icons.person_outline, color: Colors.white, size: 18),
+                        );
+                      }
+                      return const Icon(Icons.person_outline, color: Colors.white, size: 18);
+                    }),
                   ),
                 ),
               ),
@@ -1355,12 +1365,10 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
       
       // Récupérer le message personnalisé
       final customMessage = StorageService.instance.getString('custom_sos_message');
+      print('📖 Lecture: custom_sos_message = "$customMessage"');
       
-      // Utiliser le service de notification Supabase
-      await NotificationService.instance.notifyEmergencyContacts(
-        alertId: alertId,
-        latitude: position.latitude,
-        longitude: position.longitude,
+      // Utiliser EmergencyContactService pour envoyer les SMS
+      await EmergencyContactService.instance.callAllContactsWithFallback(
         customMessage: customMessage,
       );
       

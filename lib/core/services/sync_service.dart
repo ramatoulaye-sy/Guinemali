@@ -24,7 +24,8 @@ class SyncService {
   final List<Map<String, dynamic>> _failedItems = [];
   
   // Configuration
-  static const Duration _syncInterval = Duration(minutes: 2);
+  static const Duration _defaultSyncInterval = Duration(minutes: 2);
+  Duration _currentSyncInterval = const Duration(minutes: 2);
   static const Duration _connectivityCheckInterval = Duration(seconds: 30);
   static const Duration _initialRetryDelay = Duration(seconds: 10);
   
@@ -43,6 +44,9 @@ class SyncService {
       // Démarrer le monitoring de la connectivité
       _startConnectivityMonitoring();
       
+      // Charger la configuration utilisateur
+      await _loadConfig();
+
       // Démarrer la synchronisation périodique
       _startPeriodicSync();
       
@@ -55,6 +59,17 @@ class SyncService {
     } catch (e) {
       print('❌ Erreur lors de l\'initialisation du service de sync: $e');
     }
+  }
+
+  Future<void> _loadConfig() async {
+    try {
+      final auto = StorageService.instance.getBool('sync_proofs_auto', defaultValue: true);
+      final intervalMin = StorageService.instance.getInt('sync_interval_min', defaultValue: 15);
+      _currentSyncInterval = Duration(minutes: intervalMin > 0 ? intervalMin : _defaultSyncInterval.inMinutes);
+      if (!auto) {
+        _syncTimer?.cancel();
+      }
+    } catch (_) {}
   }
 
   /// Démarrer le monitoring de la connectivité
@@ -90,7 +105,7 @@ class SyncService {
   /// Démarrer la synchronisation périodique
   void _startPeriodicSync() {
     _syncTimer?.cancel();
-    _syncTimer = Timer.periodic(_syncInterval, (_) {
+    _syncTimer = Timer.periodic(_currentSyncInterval, (_) {
       if (_isOnline && !_isSyncing) {
         _performSync();
       }
@@ -226,7 +241,36 @@ class SyncService {
   /// Synchroniser une preuve
   Future<void> _syncEvidence(Map<String, dynamic> evidenceData) async {
     try {
-      await SupabaseService.instance.insert('preuves', evidenceData);
+      // Uploader le fichier dans Storage selon le type
+      final filePath = evidenceData['file_path'] as String;
+      final file = File(filePath);
+      if (!await file.exists()) throw Exception('Fichier manquant: $filePath');
+
+      final bytes = await file.readAsBytes();
+      final fileName = file.uri.pathSegments.last;
+      final type = (evidenceData['type'] as String?) ?? 'autre';
+      final bucket = type == 'audio' ? 'audio_evidence' : type == 'video' ? 'video_evidence' : type == 'photo' ? 'photo_evidence' : 'files_evidence';
+      final storagePath = '${evidenceData['alert_id']}/$fileName';
+      final uploadedPath = await SupabaseService.instance.uploadFile(
+        bucket: bucket,
+        path: storagePath,
+        file: bytes,
+        metadata: {'content-type': type == 'audio' ? 'audio/mp4' : type == 'video' ? 'video/mp4' : type == 'photo' ? 'image/jpeg' : 'application/octet-stream'},
+      );
+
+      // Insérer l’enregistrement en base
+      final row = {
+        'id': evidenceData['id'],
+        'alerte_id': evidenceData['alert_id'],
+        'type': type,
+        'chemin_fichier': uploadedPath,
+        'taille_fichier': evidenceData['file_size'],
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+      await SupabaseService.instance.insert('preuves', row);
+
+      // Marquer comme synchronisé côté local
+      await StorageService.instance.markEvidenceSynced(evidenceData['id']);
       print('✅ Preuve synchronisée: ${evidenceData['id']}');
     } catch (e) {
       throw Exception('Échec sync preuve: $e');

@@ -9,6 +9,7 @@ import 'geolocation_service.dart';
 import 'audio_recording_service.dart';
 import 'sync_service.dart';
 import 'realtime_service.dart';
+import 'emergency_contact_service.dart';
 import 'dart:async';
 
 /// Service de gestion des alertes d'urgence
@@ -385,15 +386,19 @@ class AlertService {
       }
 
       if (contacts.isEmpty) return;
-      
-      for (final contact in contacts) {
-        await NotificationService.instance.sendEmergencySMS(
-          phoneNumber: contact['numero_telephone'],
-          alertId: alertId,
-          latitude: latitude,
-          longitude: longitude,
-        );
+
+      // Utiliser le service dédié qui gère le message personnalisé + position
+      // et l'envoi séquentiel vers tous les contacts (évite les doublons).
+      final customMessage = StorageService.instance.getString('custom_sos_message') ??
+          StorageService.instance.getString('emergency_message_template');
+
+      if (AppConstants.enableLogging) {
+        print('📨 Envoi SMS via EmergencyContactService (template personnalisé)');
       }
+
+      await EmergencyContactService.instance.callAllContactsWithFallback(
+        customMessage: customMessage,
+      );
 
       if (AppConstants.enableLogging) {
         print('✅ Contacts d\'urgence notifiés');

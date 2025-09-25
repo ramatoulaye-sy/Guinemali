@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:guinemali/core/constants/app_constants.dart';
 import 'package:guinemali/core/services/storage_service.dart';
 import 'package:guinemali/core/services/evidence_service.dart';
+import 'package:guinemali/core/services/sync_service.dart';
 import 'package:record/record.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -13,6 +14,7 @@ import 'package:crypto/crypto.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
+import 'package:path/path.dart' as p;
 
 class VictimEvidenceScreen extends StatefulWidget {
   const VictimEvidenceScreen({super.key});
@@ -55,11 +57,26 @@ class _VictimEvidenceScreenState extends State<VictimEvidenceScreen> {
     _currentAlertId = StorageService.instance.getString(AppConstants.keyCurrentAlertId);
   }
 
+  Future<String> _resolveEvidencePath(String primary, {String? secondary}) async {
+    // 1) Chemin primaire
+    if (primary.isNotEmpty && await File(primary).exists()) return primary;
+    // 2) Chemin secondaire
+    if (secondary != null && secondary.isNotEmpty && await File(secondary).exists()) return secondary;
+    // 3) Tenter par basename dans le dossier documents (migration cache -> persistant)
+    try {
+      final docs = await getApplicationDocumentsDirectory();
+      final candidate = p.join(docs.path, p.basename(primary.isNotEmpty ? primary : (secondary ?? '')));
+      if (await File(candidate).exists()) return candidate;
+    } catch (_) {}
+    return primary; // retour par défaut
+  }
+
   Future<void> _playEvidence(EvidenceItem evidence) async {
     try {
       if (evidence.type == EvidenceType.audio) {
         // Mini-lecteur audio modal
-        await _audioPlayer.setFilePath(evidence.originalPath);
+        final path = await _resolveEvidencePath(evidence.originalPath, secondary: evidence.filePath);
+        await _audioPlayer.setFilePath(path);
         await _audioPlayer.play();
         if (!mounted) return;
         showModalBottomSheet(
@@ -67,11 +84,16 @@ class _VictimEvidenceScreenState extends State<VictimEvidenceScreen> {
           backgroundColor: Colors.white,
           builder: (ctx) => _buildAudioPlayerSheet(evidence),
         ).whenComplete(() => _audioPlayer.stop());
-      } else {
+      } else if (evidence.type == EvidenceType.video) {
         // Lecteur vidéo plein écran
         _videoController?.dispose();
         _chewieController?.dispose();
-        _videoController = VideoPlayerController.file(File(evidence.originalPath));
+        final path = await _resolveEvidencePath(evidence.originalPath, secondary: evidence.filePath);
+        if (!await File(path).exists()) {
+          _showSnack('Fichier introuvable', isError: true);
+          return;
+        }
+        _videoController = VideoPlayerController.file(File(path));
         await _videoController!.initialize();
         _chewieController = ChewieController(
           videoPlayerController: _videoController!,
@@ -95,6 +117,26 @@ class _VictimEvidenceScreenState extends State<VictimEvidenceScreen> {
         )).whenComplete(() {
           _videoController?.pause();
         });
+      } else if (evidence.type == EvidenceType.photo) {
+        // Afficher la photo
+        if (!mounted) return;
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => Scaffold(
+              appBar: AppBar(
+                title: const Text('Photo'),
+                backgroundColor: AppConstants.primaryColor,
+                foregroundColor: AppConstants.whiteColor,
+              ),
+              body: Center(
+                child: Image.file(
+                  File(evidence.originalPath),
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+          ),
+        );
       }
     } catch (e) {
       _showSnack('Erreur de lecture: $e', isError: true);
@@ -241,19 +283,15 @@ class _VictimEvidenceScreenState extends State<VictimEvidenceScreen> {
       final path = await _audioRecorder.stop();
       if (path != null) {
         // Enregistrer via le service local
-        final evidence = await EvidenceService.instance.recordAudioEvidence(
+        await EvidenceService.instance.recordAudioEvidence(
           alertId: _currentAlertId ?? 'manual',
           filePath: path,
           duration: _recordingDuration.inSeconds,
         );
         
-        if (evidence != null) {
-          // Recharger la liste des preuves
-          await _loadEvidenceList();
-          _showSnack('Preuve audio enregistrée et chiffrée');
-        } else {
-          _showSnack('Erreur lors de l\'enregistrement de la preuve', isError: true);
-        }
+        // Recharger la liste des preuves
+        await _loadEvidenceList();
+        _showSnack('Preuve audio enregistrée et chiffrée');
       }
     } catch (e) {
       _showSnack('Erreur lors de l\'arrêt de l\'enregistrement: $e', isError: true);
@@ -363,8 +401,14 @@ class _VictimEvidenceScreenState extends State<VictimEvidenceScreen> {
 
   Future<void> _deleteEvidence(EvidenceItem evidence) async {
     try {
-      // Supprimer via le service local
-      await EvidenceService.instance.deleteEvidence(evidence.id);
+      // Supprimer le fichier local
+      final file = File(evidence.originalPath);
+      if (await file.exists()) {
+        await file.delete();
+      }
+      
+      // Supprimer de la base de données locale
+      await StorageService.instance.removeEvidence(evidence.id);
       
       // Recharger la liste
       await _loadEvidenceList();
@@ -511,7 +555,7 @@ class _VictimEvidenceScreenState extends State<VictimEvidenceScreen> {
               color: AppConstants.primaryColor,
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           Expanded(
             child: _buildRecordingButton(
               icon: Icons.videocam,
@@ -519,6 +563,16 @@ class _VictimEvidenceScreenState extends State<VictimEvidenceScreen> {
               isRecording: _isRecordingVideo,
               onTap: _startVideoRecording,
               color: AppConstants.secondaryColor,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _buildRecordingButton(
+              icon: Icons.camera_alt,
+              label: 'Photo',
+              isRecording: false,
+              onTap: _takePhoto,
+              color: Colors.orange,
             ),
           ),
         ],
@@ -669,19 +723,31 @@ class _VictimEvidenceScreenState extends State<VictimEvidenceScreen> {
           decoration: BoxDecoration(
             color: evidence.type == EvidenceType.audio 
                 ? AppConstants.primaryColor.withOpacity(0.1)
-                : AppConstants.secondaryColor.withOpacity(0.1),
+                : evidence.type == EvidenceType.photo
+                    ? Colors.orange.withOpacity(0.1)
+                    : AppConstants.secondaryColor.withOpacity(0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(
-            evidence.type == EvidenceType.audio ? Icons.audiotrack : Icons.videocam,
+            evidence.type == EvidenceType.audio 
+                ? Icons.audiotrack 
+                : evidence.type == EvidenceType.photo
+                    ? Icons.camera_alt
+                    : Icons.videocam,
             color: evidence.type == EvidenceType.audio 
                 ? AppConstants.primaryColor 
-                : AppConstants.secondaryColor,
+                : evidence.type == EvidenceType.photo
+                    ? Colors.orange
+                    : AppConstants.secondaryColor,
             size: 24,
           ),
         ),
         title: Text(
-          evidence.type == EvidenceType.audio ? 'Enregistrement Audio' : 'Enregistrement Vidéo',
+          evidence.type == EvidenceType.audio 
+              ? 'Enregistrement Audio' 
+              : evidence.type == EvidenceType.photo
+                  ? 'Photo'
+                  : 'Enregistrement Vidéo',
           style: const TextStyle(
             fontWeight: FontWeight.w600,
             color: AppConstants.blackColor,
@@ -698,13 +764,14 @@ class _VictimEvidenceScreenState extends State<VictimEvidenceScreen> {
               ),
             ),
             const SizedBox(height: 4),
-            Row(
+            Wrap(
+              spacing: 8,
               children: [
-                Icon(
-                  evidence.isEncrypted ? Icons.lock : Icons.lock_open,
-                  size: 12,
-                  color: evidence.isEncrypted ? AppConstants.successColor : AppConstants.warningColor,
-                ),
+            Icon(
+              evidence.isEncrypted ? Icons.lock : Icons.lock_open,
+              size: 12,
+              color: evidence.isEncrypted ? AppConstants.successColor : AppConstants.warningColor,
+            ),
                 const SizedBox(width: 4),
                 Text(
                   evidence.isEncrypted ? 'Chiffré' : 'Non chiffré',
@@ -713,7 +780,7 @@ class _VictimEvidenceScreenState extends State<VictimEvidenceScreen> {
                     color: evidence.isEncrypted ? AppConstants.successColor : AppConstants.warningColor,
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 4),
                 Icon(
                   evidence.isSynced ? Icons.cloud_done : Icons.cloud_off,
                   size: 12,
@@ -721,7 +788,7 @@ class _VictimEvidenceScreenState extends State<VictimEvidenceScreen> {
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  evidence.isSynced ? 'Synchronisé' : 'En attente',
+              evidence.isSynced ? 'Synchronisé' : 'En attente',
                   style: TextStyle(
                     fontSize: 10,
                     color: evidence.isSynced ? AppConstants.successColor : AppConstants.infoColor,
@@ -742,9 +809,29 @@ class _VictimEvidenceScreenState extends State<VictimEvidenceScreen> {
               icon: const Icon(Icons.sync, color: AppConstants.infoColor),
               tooltip: 'Réessayer la synchronisation',
               onPressed: () async {
-                final count = await EvidenceService.instance.attemptSyncAll();
-                _showSnack(count > 0 ? 'Synchronisation: $count élément(s) mis à jour' : 'Rien à synchroniser');
-                await _loadEvidenceList();
+                try {
+                  _showSnack('Synchronisation en cours...');
+                  
+                  // Ajouter à la file de synchronisation
+                  await SyncService.instance.addToSyncQueue('evidence', {
+                    'id': evidence.id,
+                    'alertId': evidence.alertId ?? 'manual',
+                    'type': evidence.type.toString().split('.').last,
+                    'file_path': evidence.originalPath,
+                    'file_size': evidence.size,
+                    'timestamp': evidence.dateCreated.toIso8601String(),
+                  });
+                  
+                  // Déclencher la synchronisation immédiate
+                  await SyncService.instance.forceSync();
+                  
+                  // Recharger la liste
+                  await _loadEvidenceList();
+                  
+                  _showSnack('Synchronisation terminée');
+                } catch (e) {
+                  _showSnack('Erreur de synchronisation: $e', isError: true);
+                }
               },
             ),
             IconButton(
@@ -807,9 +894,25 @@ class _VictimEvidenceScreenState extends State<VictimEvidenceScreen> {
   String _formatDate(DateTime date) {
     return '${date.day}/${date.month}/${date.year} à ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
   }
+
+  Future<void> _takePhoto() async {
+    try {
+      final path = await EvidenceService.instance.takePhoto(_currentAlertId ?? 'manual');
+      if (path != null) {
+        await _loadEvidenceList();
+        _showSnack('Photo enregistrée');
+      } else {
+        _showSnack('Échec de la prise de photo', isError: true);
+      }
+    } catch (e) {
+      _showSnack('Erreur: $e', isError: true);
+    }
+  }
+
+
 }
 
-enum EvidenceType { audio, video }
+enum EvidenceType { audio, video, photo }
 
 class EvidenceItem {
   final String id;
@@ -854,7 +957,7 @@ class EvidenceItem {
   factory EvidenceItem.fromJson(Map<String, dynamic> json) {
     return EvidenceItem(
       id: json['id'],
-      type: json['type'] == 'EvidenceType.audio' ? EvidenceType.audio : EvidenceType.video,
+      type: json['type'] == 'EvidenceType.audio' ? EvidenceType.audio : json['type'] == 'EvidenceType.photo' ? EvidenceType.photo : EvidenceType.video,
       filePath: json['filePath'],
       originalPath: json['originalPath'],
       duration: Duration(seconds: json['duration']),
@@ -869,12 +972,12 @@ class EvidenceItem {
   factory EvidenceItem.fromLocalService(Map<String, dynamic> evidence) {
     return EvidenceItem(
       id: evidence['id'] as String,
-      type: evidence['type'] == 'audio' ? EvidenceType.audio : EvidenceType.video,
-      filePath: evidence['encryptedPath'] as String,
-      originalPath: evidence['originalPath'] as String,
-      duration: Duration(seconds: evidence['duration'] as int),
-      size: evidence['size'] as int,
-      dateCreated: DateTime.parse(evidence['timestamp'] as String),
+      type: evidence['type'] == 'audio' ? EvidenceType.audio : evidence['type'] == 'photo' ? EvidenceType.photo : EvidenceType.video,
+      filePath: (evidence['file_path'] ?? evidence['encryptedPath'] ?? evidence['path']) as String,
+      originalPath: (evidence['originalPath'] ?? evidence['file_path'] ?? evidence['path']) as String,
+      duration: Duration(seconds: (evidence['duration'] ?? 0) as int),
+      size: (evidence['file_size'] ?? evidence['size'] ?? 0) as int,
+      dateCreated: DateTime.parse((evidence['timestamp'] ?? DateTime.now().toIso8601String()) as String),
       isEncrypted: true, // Toujours chiffré avec le service local
       isSynced: false, // Pas encore synchronisé avec Supabase
       alertId: evidence['alertId'] as String?,

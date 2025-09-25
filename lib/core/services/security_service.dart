@@ -10,6 +10,7 @@ class SecurityService {
 
   final LocalAuthentication _localAuth = LocalAuthentication();
   final FlutterSecureStorage _secure = const FlutterSecureStorage();
+  static const MethodChannel _platform = MethodChannel('app.stealth');
 
   static const String _keyLockMethod = 'app_lock_method';
   static const String _keyPin = 'app_lock_pin';
@@ -57,6 +58,20 @@ class SecurityService {
           useErrorDialogs: true,
         ),
       );
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Tente d'activer/désactiver le mode furtif au niveau système (Android uniquement)
+  /// - Masquage icône lanceur / atténuation notifications selon impl native
+  /// Retourne true si une implémentation native a confirmé l'action
+  Future<bool> setStealthModeSystem(bool enabled) async {
+    try {
+      final result = await _platform.invokeMethod<bool>('setStealth', {
+        'enabled': enabled,
+      });
+      return result == true;
     } catch (_) {
       return false;
     }
