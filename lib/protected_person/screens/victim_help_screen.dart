@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 // removed unused import
 import 'package:url_launcher/url_launcher.dart';
+import 'package:guinemali/core/services/a11y_service.dart';
+import 'package:guinemali/core/services/storage_service.dart';
 
 class VictimHelpScreen extends StatefulWidget {
   const VictimHelpScreen({super.key});
@@ -11,6 +14,73 @@ class VictimHelpScreen extends StatefulWidget {
 
 class _VictimHelpScreenState extends State<VictimHelpScreen> {
   int _selectedIndex = 0;
+
+  String _t(String key) {
+    final lang = StorageService.instance.getString('selected_language') ?? 'fr';
+    const map = {
+      'fr': {
+        'help_title': 'Aide et Support',
+        'more_help': 'Besoin d\'Aide Supplémentaire ?',
+        'contact_us': 'Si vous avez des questions ou rencontrez des problèmes, n\'hésitez pas à nous contacter.',
+        'email_support': 'Email Support',
+        'write_us': 'Nous écrire',
+        'phone': 'Téléphone',
+        'call_us': 'Nous appeler',
+        'faq': 'FAQ',
+        'faq_sub': 'Questions fréquentes',
+        'manual': 'Manuel Utilisateur',
+        'manual_sub': 'Guide complet',
+        'diagnose': 'Diagnostiquer les permissions',
+        'test_notifications': 'Tester les notifications',
+      },
+      'sus': {
+        'help_title': 'Xɔriɲɛn nɛ kɔrɔ',
+        'more_help': 'I tan nɛɛ xɔriɲɛn?',
+        'contact_us': 'I bɛ n tan nɛɛ xɔriɲɛn, i lu n fan yɔn.',
+        'email_support': 'Email xɔriɲɛn',
+        'write_us': 'N fan yɔn',
+        'phone': 'Telefɔni',
+        'call_us': 'N bɛ naxan',
+        'faq': 'FAQ',
+        'faq_sub': 'Kɔrɔ mɛnɛ',
+        'manual': 'Fɛɛn kili',
+        'manual_sub': 'Tariki kɛndɛ',
+        'diagnose': 'Sɛbɛn sɛnni fɛnsɛn',
+        'test_notifications': 'Ṣɛli sɛnni',
+      },
+      'ff': {
+        'help_title': 'Ballal e Wallitorde',
+        'more_help': 'Aɗa jogii ballal goɗɗo?',
+        'contact_us': 'So aɗa jogii caɗeele, ena waawi nden tawi amen.',
+        'email_support': 'Ballal e Imeel',
+        'write_us': 'Winndu amen',
+        'phone': 'Telefoon',
+        'call_us': 'Noddii amen',
+        'faq': 'FAQ',
+        'faq_sub': 'Naamnaaji jaajol',
+        'manual': 'Doggitannde Kuutorɗo',
+        'manual_sub': 'Jaaɓnirgal timmunde',
+        'diagnose': 'Ƴeewto jamirooje',
+        'test_notifications': 'Ƴeewto tintinooje',
+      },
+      'mlq': {
+        'help_title': 'Bana ni Sutura',
+        'more_help': 'I ba fɔ bana kɔrɔ?',
+        'contact_us': 'I ka sɔrɔ kɛlɛ, i bɛ fɔ i ɲɛ.',
+        'email_support': 'Email Bana',
+        'write_us': 'Na i ma',
+        'phone': 'Tilifɔni',
+        'call_us': 'Bɔ i ma',
+        'faq': 'FAQ',
+        'faq_sub': 'Demi kɛcɛn',
+        'manual': 'Jatigi Kɔnɔ',
+        'manual_sub': 'Gidɛ sugandilen',
+        'diagnose': 'Wɛrɛwɛrɛ ɲɛɛnɛ',
+        'test_notifications': 'Ɲɛɛnɛ kɔlɔsi',
+      },
+    };
+    return (map[lang] ?? map['fr']!)[key] ?? map['fr']![key] ?? key;
+  }
 
   final List<Map<String, dynamic>> _helpSections = [
     {
@@ -162,160 +232,711 @@ class _VictimHelpScreenState extends State<VictimHelpScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Aide et Support'),
-        backgroundColor: Colors.red.shade600,
-        foregroundColor: Colors.white,
-      ),
-      body: Row(
-        children: [
-          // Navigation latérale
-          Container(
-            width: 250,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade50,
-              border: Border(
-                right: BorderSide(color: Colors.grey.shade300),
-              ),
-            ),
-            child: _buildSidebar(),
-          ),
-          // Contenu principal
-          Expanded(
-            child: _buildContent(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSidebar() {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16.0),
-      itemCount: _helpSections.length,
-      itemBuilder: (context, index) {
-        final section = _helpSections[index];
-        final isSelected = _selectedIndex == index;
-        
-        return Card(
-          margin: const EdgeInsets.only(bottom: 8.0),
-          elevation: isSelected ? 4 : 1,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(
-              color: isSelected ? Colors.red.shade600 : Colors.transparent,
-              width: 2,
-            ),
-          ),
-          child: ListTile(
-            leading: Icon(
-              section['icon'],
-              color: isSelected ? Colors.red.shade600 : Colors.grey.shade600,
-            ),
-            title: Text(
-              section['title'],
-              style: TextStyle(
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected ? Colors.red.shade600 : Colors.black87,
-              ),
-            ),
-            onTap: () {
-              setState(() {
-                _selectedIndex = index;
-              });
-            },
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildContent() {
-    if (_selectedIndex >= _helpSections.length) return const SizedBox.shrink();
-    
-    final section = _helpSections[_selectedIndex];
-    
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // En-tête de la section
-          Row(
-            children: [
-              Icon(
-                section['icon'],
-                size: 32,
-                color: Colors.red.shade600,
-              ),
-              const SizedBox(width: 16),
-              Text(
-                section['title'],
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.red.shade600,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          
-          // Contenu de la section
-          ...section['content'].map<Widget>((item) => _buildHelpItem(item)).toList(),
-          
-          const SizedBox(height: 32),
-          
-          // Section de support
-          _buildSupportSection(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHelpItem(Map<String, dynamic> item) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 24.0),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
+      backgroundColor: Colors.white,
+      body: SafeArea(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              item['title'],
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: Colors.red.shade600,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              item['description'],
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: Colors.grey.shade700,
-              ),
-            ),
-            const SizedBox(height: 20),
+            // Header avec titre et bouton retour
+            _buildHeader(context),
             
-            // Étapes
-            if (item['steps'] != null) ...[
-              Text(
-                'Étapes à suivre :',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 12),
-              ...item['steps'].map<Widget>((step) => _buildStepItem(step)).toList(),
-            ],
+            // Contenu principal - grille mobile-first
+            Expanded(
+              child: _buildMobileContent(context),
+            ),
+            
+            // Zone SOS en bas
+            _buildSOSZone(context),
           ],
         ),
       ),
     );
   }
 
+  Widget _buildHeader(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Bouton retour
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: colorScheme.primary.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: colorScheme.primary.withOpacity(0.25)),
+              ),
+              child: Icon(
+                Icons.arrow_back_ios_new,
+                color: colorScheme.primary,
+                size: 20,
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          // Titre et sous-titre
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _t('help_title'),
+                  style: const TextStyle(
+                    fontFamily: 'Montserrat',
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF945acb),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Trouvez rapidement l\'aide dont vous avez besoin',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 14,
+                    color: Colors.grey[700],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileContent(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        children: [
+          // Grille des sections d'aide
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              childAspectRatio: 1.1,
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 16,
+            ),
+            itemCount: _helpSections.length,
+            itemBuilder: (context, index) {
+              return _buildAnimatedCard(context, index);
+            },
+          ),
+          const SizedBox(height: 20),
+          
+          // Zone de support supplémentaire
+          _buildSupportSection(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAnimatedCard(BuildContext context, int index) {
+    final section = _helpSections[index];
+    final isSelected = _selectedIndex == index;
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    return TweenAnimationBuilder<double>(
+      duration: Duration(milliseconds: 300 + (index * 100)),
+      tween: Tween(begin: 0.0, end: 1.0),
+      builder: (context, value, child) {
+        return Transform.translate(
+          offset: Offset(0, 20 * (1 - value)),
+          child: Opacity(
+            opacity: value,
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _selectedIndex = index;
+                });
+                A11yService.announceIfEnabled(context, 'Section: ${section['title']}');
+                _showSectionDetails(context, section);
+              },
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isSelected 
+                        ? colorScheme.primary
+                        : Colors.grey.withOpacity(0.3),
+                    width: isSelected ? 2 : 1,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Icône avec effet de halo
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: colorScheme.primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: isSelected ? [
+                          BoxShadow(
+                            color: colorScheme.primary.withOpacity(0.2),
+                            blurRadius: 8,
+                            spreadRadius: 1,
+                          ),
+                        ] : null,
+                      ),
+                      child: Icon(
+                        section['icon'],
+                        size: 32,
+                        color: colorScheme.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Titre
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        section['title'],
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF945acb),
+                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSupportSection(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.withOpacity(0.2)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _t('more_help'),
+            style: TextStyle(
+              fontFamily: 'Montserrat',
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: colorScheme.primary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            _t('contact_us'),
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 14,
+              color: Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 20),
+          _buildSupportButtons(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSupportButtons(BuildContext context) {
+    return Column(
+      children: [
+        _buildSupportButton(
+          context,
+          icon: Icons.email,
+          title: _t('email_support'),
+          subtitle: _t('write_us'),
+          onTap: () => _launchEmail(context),
+        ),
+        const SizedBox(height: 12),
+        _buildSupportButton(
+          context,
+          icon: Icons.phone,
+          title: _t('phone'),
+          subtitle: _t('call_us'),
+          onTap: () => _launchPhone(context),
+        ),
+        const SizedBox(height: 12),
+        _buildSupportButton(
+          context,
+          icon: Icons.help_outline,
+          title: _t('faq'),
+          subtitle: _t('faq_sub'),
+          onTap: () => _launchFAQ(context),
+        ),
+        const SizedBox(height: 12),
+        _buildSupportButton(
+          context,
+          icon: Icons.book,
+          title: _t('manual'),
+          subtitle: _t('manual_sub'),
+          onTap: () => _launchManual(context),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSupportButton(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.withOpacity(0.2)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 4,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: colorScheme.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: colorScheme.primary, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF945acb),
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios,
+              color: Colors.grey[400],
+              size: 16,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSOSZone(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.red[50],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.red.withOpacity(0.3), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.red.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.red[100],
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              Icons.warning,
+              color: Colors.red[600],
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Déclencher une Alerte SOS',
+                  style: TextStyle(
+                    fontFamily: 'Montserrat',
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red[700],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'En cas d\'urgence immédiate',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 12,
+                    color: Colors.red[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: () {
+              // TODO: Implémenter la logique SOS
+              A11yService.announceIfEnabled(context, 'Alerte SOS déclenchée');
+            },
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red[600],
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.red.withOpacity(0.3),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.emergency,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSectionDetails(BuildContext context, Map<String, dynamic> section) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _buildSectionModal(context, section),
+    );
+  }
+
+  Widget _buildSectionModal(BuildContext context, Map<String, dynamic> section) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.8,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          // Handle bar
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          // Header
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF945acb).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    section['icon'],
+                    color: const Color(0xFF945acb),
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    section['title'],
+                    style: const TextStyle(
+                      fontFamily: 'Montserrat',
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF2D2D2D),
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.close, size: 20),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Content
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                children: (section['content'] as List).map<Widget>((item) {
+                  return _buildHelpItem(item);
+                }).toList(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Méthodes de lancement des liens externes
+  Future<void> _launchEmail(BuildContext context) async {
+    const email = 'support@guinemali.com';
+    final Uri emailUri = Uri(scheme: 'mailto', path: email);
+    
+    try {
+      if (await canLaunchUrl(emailUri)) {
+        await launchUrl(emailUri);
+        A11yService.announceIfEnabled(context, 'Email ouvert');
+      } else {
+        await Clipboard.setData(const ClipboardData(text: email));
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Email copié: $email')),
+          );
+          A11yService.announceIfEnabled(context, 'Email copié dans le presse-papiers');
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _launchPhone(BuildContext context) async {
+    const phone = '+224 123 456 789';
+    final Uri phoneUri = Uri(scheme: 'tel', path: phone);
+    
+    try {
+      if (await canLaunchUrl(phoneUri)) {
+        await launchUrl(phoneUri);
+        A11yService.announceIfEnabled(context, 'Appel téléphonique lancé');
+      } else {
+        await Clipboard.setData(const ClipboardData(text: phone));
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Numéro copié: $phone')),
+          );
+          A11yService.announceIfEnabled(context, 'Numéro copié dans le presse-papiers');
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _launchFAQ(BuildContext context) async {
+    final url = _getLocalizedUrl('faq_url');
+    
+    try {
+      if (await canLaunchUrl(Uri.parse(url))) {
+        await launchUrl(Uri.parse(url));
+        A11yService.announceIfEnabled(context, 'FAQ ouverte');
+      } else {
+        await Clipboard.setData(ClipboardData(text: url));
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Lien FAQ copié: $url')),
+          );
+          A11yService.announceIfEnabled(context, 'Lien FAQ copié dans le presse-papiers');
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _launchManual(BuildContext context) async {
+    final url = _getLocalizedUrl('manual_url');
+    
+    try {
+      if (await canLaunchUrl(Uri.parse(url))) {
+        await launchUrl(Uri.parse(url));
+        A11yService.announceIfEnabled(context, 'Manuel ouvert');
+      } else {
+        await Clipboard.setData(ClipboardData(text: url));
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Lien Manuel copié: $url')),
+          );
+          A11yService.announceIfEnabled(context, 'Lien Manuel copié dans le presse-papiers');
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e')),
+        );
+      }
+    }
+  }
+
+  String _getLocalizedUrl(String key) {
+    final lang = StorageService.instance.getString('selected_language') ?? 'fr';
+    const urls = {
+      'fr': {
+        'faq_url': 'https://guinemali.com/faq',
+        'manual_url': 'https://guinemali.com/manual',
+      },
+      'sus': {
+        'faq_url': 'https://guinemali.com/sus/faq',
+        'manual_url': 'https://guinemali.com/sus/manual',
+      },
+      'ff': {
+        'faq_url': 'https://guinemali.com/ff/faq',
+        'manual_url': 'https://guinemali.com/ff/manual',
+      },
+      'mlq': {
+        'faq_url': 'https://guinemali.com/mlq/faq',
+        'manual_url': 'https://guinemali.com/mlq/manual',
+      },
+    };
+    
+    return urls[lang]?[key] ?? urls['fr']![key]!;
+  }
+
+  // Ancienne sidebar supprimée (non utilisée avec le design mobile-first)
+
+  // Ancien contenu (layout desktop) supprimé (non utilisé)
+
+  Widget _buildHelpItem(Map<String, dynamic> item) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16.0),
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            item['title'],
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: colorScheme.primary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            item['description'],
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.8),
+            ),
+          ),
+          const SizedBox(height: 14),
+          if (item['steps'] != null) ...[
+            Text(
+              'Étapes à suivre :',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 10),
+            ...item['steps'].map<Widget>((step) => _buildStepItem(step)).toList(),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildStepItem(String step) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
       child: Row(
@@ -325,7 +946,7 @@ class _VictimHelpScreenState extends State<VictimHelpScreen> {
             width: 24,
             height: 24,
             decoration: BoxDecoration(
-              color: Colors.red.shade600,
+              color: colorScheme.primary,
               shape: BoxShape.circle,
             ),
             child: const Icon(
@@ -339,7 +960,7 @@ class _VictimHelpScreenState extends State<VictimHelpScreen> {
             child: Text(
               step,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.grey.shade700,
+                color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.8),
               ),
             ),
           ),
@@ -348,7 +969,9 @@ class _VictimHelpScreenState extends State<VictimHelpScreen> {
     );
   }
 
-  Widget _buildSupportSection() {
+  // Supprimé: ancienne version _buildSupportSectionOld non utilisée
+  /*Widget _buildSupportSectionOld() {
+    final colorScheme = Theme.of(context).colorScheme;
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -358,17 +981,17 @@ class _VictimHelpScreenState extends State<VictimHelpScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Besoin d\'Aide Supplémentaire ?',
+              _t('more_help'),
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.bold,
-                color: Colors.red.shade600,
+                color: colorScheme.primary,
               ),
             ),
             const SizedBox(height: 16),
             Text(
-              'Si vous avez des questions ou rencontrez des problèmes, n\'hésitez pas à nous contacter.',
+              _t('contact_us'),
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: Colors.grey.shade700,
+                color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.8),
               ),
             ),
             const SizedBox(height: 24),
@@ -379,15 +1002,22 @@ class _VictimHelpScreenState extends State<VictimHelpScreen> {
                 Expanded(
                   child: _buildSupportButton(
                     icon: Icons.email,
-                    title: 'Email Support',
-                    subtitle: 'Nous écrire',
+                    title: _t('email_support'),
+                    subtitle: _t('write_us'),
                     color: Colors.blue,
                     onTap: () async {
                       final uri = Uri.parse('mailto:support@guinemali.org?subject=Support%20Guinemali');
+                      A11yService.announceIfEnabled(context, 'Ouverture de l\'email de support');
                       if (await canLaunchUrl(uri)) {
                         await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Client email ouvert')));
+                        A11yService.announceIfEnabled(context, 'Client email ouvert');
                       } else {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Impossible d\'ouvrir l\'email')));
+                        await Clipboard.setData(const ClipboardData(text: 'support@guinemali.org'));
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Adresse email copiée')));
+                        A11yService.announceIfEnabled(context, 'Adresse email copiée');
                       }
                     },
                   ),
@@ -396,15 +1026,23 @@ class _VictimHelpScreenState extends State<VictimHelpScreen> {
                 Expanded(
                   child: _buildSupportButton(
                     icon: Icons.phone,
-                    title: 'Téléphone',
-                    subtitle: 'Nous appeler',
+                    title: _t('phone'),
+                    subtitle: _t('call_us'),
                     color: Colors.green,
                     onTap: () async {
-                      final uri = Uri.parse('tel:+224000000000');
+                      final phone = '+224000000000';
+                      final uri = Uri.parse('tel:$phone');
+                      A11yService.announceIfEnabled(context, 'Ouverture de l\'appel');
                       if (await canLaunchUrl(uri)) {
                         await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Application téléphone ouverte')));
+                        A11yService.announceIfEnabled(context, 'Application téléphone ouverte');
                       } else {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Impossible d\'ouvrir l\'appel')));
+                        await Clipboard.setData(ClipboardData(text: phone));
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Numéro copié')));
+                        A11yService.announceIfEnabled(context, 'Numéro copié');
                       }
                     },
                   ),
@@ -420,13 +1058,22 @@ class _VictimHelpScreenState extends State<VictimHelpScreen> {
                 Expanded(
                   child: _buildSupportButton(
                     icon: Icons.question_answer,
-                    title: 'FAQ',
-                    subtitle: 'Questions fréquentes',
+                    title: _t('faq'),
+                    subtitle: _t('faq_sub'),
                     color: Colors.orange,
                     onTap: () async {
-                      final uri = Uri.parse('https://guinemali.org/faq');
+                      final uri = _getLocalizedUri('faq');
+                      A11yService.announceIfEnabled(context, 'Ouverture de la FAQ');
                       if (await canLaunchUrl(uri)) {
                         await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('FAQ ouverte')));
+                        A11yService.announceIfEnabled(context, 'FAQ ouverte');
+                      } else {
+                        await Clipboard.setData(ClipboardData(text: uri.toString()));
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Lien FAQ copié')));
+                        A11yService.announceIfEnabled(context, 'Lien FAQ copié');
                       }
                     },
                   ),
@@ -435,14 +1082,64 @@ class _VictimHelpScreenState extends State<VictimHelpScreen> {
                 Expanded(
                   child: _buildSupportButton(
                     icon: Icons.book,
-                    title: 'Manuel Utilisateur',
-                    subtitle: 'Guide complet',
+                    title: _t('manual'),
+                    subtitle: _t('manual_sub'),
                     color: Colors.purple,
                     onTap: () async {
-                      final uri = Uri.parse('https://guinemali.org/manuel');
+                      final uri = _getLocalizedUri('manual');
+                      A11yService.announceIfEnabled(context, 'Ouverture du manuel utilisateur');
                       if (await canLaunchUrl(uri)) {
                         await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Manuel ouvert')));
+                        A11yService.announceIfEnabled(context, 'Manuel ouvert');
+                      } else {
+                        await Clipboard.setData(ClipboardData(text: uri.toString()));
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Lien manuel copié')));
+                        A11yService.announceIfEnabled(context, 'Lien manuel copié');
                       }
+                    },
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+
+            // Outils techniques
+            Row(
+              children: [
+                Expanded(
+                  child: _buildSupportButton(
+                    icon: Icons.privacy_tip,
+                    title: _t('diagnose'),
+                    subtitle: 'GPS, SMS, stockage',
+                    color: colorScheme.primary,
+                    onTap: () async {
+                      A11yService.announceIfEnabled(context, 'Diagnostic des permissions');
+                      // Ouvre la page permissions existante
+                      if (!mounted) return;
+                      Navigator.of(context).pushNamed('/victim/permissions');
+                    },
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildSupportButton(
+                    icon: Icons.notifications_active,
+                    title: _t('test_notifications'),
+                    subtitle: 'Push/SMS (simulation)',
+                    color: colorScheme.secondary,
+                    onTap: () async {
+                      // Test simple: lire préférence et annoncer
+                      final mode = StorageService.instance.getString('notification_type') ?? 'push';
+                      final label = mode == 'both' ? 'Push + SMS' : (mode == 'sms' ? 'SMS' : 'Push');
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Test notifications: $label')),
+                      );
+                      A11yService.announceIfEnabled(context, 'Test notifications: $label');
                     },
                   ),
                 ),
@@ -452,9 +1149,10 @@ class _VictimHelpScreenState extends State<VictimHelpScreen> {
         ),
       ),
     );
-  }
+  }*/
 
-  Widget _buildSupportButton({
+  // Supprimé: ancienne version _buildSupportButtonOld non utilisée
+  /*Widget _buildSupportButtonOld({
     required IconData icon,
     required String title,
     required String subtitle,
@@ -484,7 +1182,7 @@ class _VictimHelpScreenState extends State<VictimHelpScreen> {
               Text(
                 subtitle,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.grey.shade600,
+                  color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.7),
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -493,5 +1191,5 @@ class _VictimHelpScreenState extends State<VictimHelpScreen> {
         ),
       ),
     );
-  }
+  }*/
 }

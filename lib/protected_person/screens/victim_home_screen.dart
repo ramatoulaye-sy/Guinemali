@@ -24,7 +24,6 @@ import '../widgets/emergency_plan_widget.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../core/services/storage_service.dart';
 import '../../core/widgets/gps_permission_widget.dart';
-import './victim_active_alert_screen.dart';
 
 /// Écran d'accueil principal pour les victimes
 /// Contient le bouton SOS animé et les actions rapides
@@ -201,91 +200,121 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
       _isEmergencyMode = true;
     });
 
-    // Navigation immédiate et unique vers l'écran d'alerte active
-    if (mounted) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
+    try {
+      if (AppConstants.enableLogging) {
+        print('🚨 Déclenchement de l\'alerte SOS...');
+        print('👤 Utilisateur: ${authProvider.currentUser!.prenom} (ID: ${authProvider.currentUser!.id})');
+      }
+
+      // Vibration tactile
+      HapticFeedback.heavyImpact();
+      
+      // Animation d'urgence
+      _backgroundController.forward();
+
+      // Obtenir rapidement la dernière position connue, sinon (0,0)
+      Position? position;
+      double latitude = 0.0;
+      double longitude = 0.0;
+      try {
+        position = await GeolocationService.instance.getLastKnownPosition();
+        if (position != null) {
+          latitude = position.latitude;
+          longitude = position.longitude;
+        }
+      } catch (_) {}
+
+      // Lancer la récupération de position actuelle sans bloquer
+      Future(() async {
+        try { await GeolocationService.instance.getCurrentPosition(); } catch (_) {}
+      });
+
+      // Créer l'alerte D'ABORD
+      print('🚨 Création de l\'alerte d\'urgence...');
+      final alertId = await AlertService.instance.createEmergencyAlert(
+        latitude: latitude,
+        longitude: longitude,
+        type: 'urgence',
+        dangerLevel: 5,
+      );
+      
+      print('✅ Alerte créée avec succès: $alertId');
+
+      // Attendre que l'alerte soit complètement sauvegardée
+      await Future.delayed(const Duration(milliseconds: 200));
+      
+      // Vérifier que l'alerte est bien sauvegardée avant navigation
+      final savedAlertId = StorageService.instance.getString(AppConstants.keyCurrentAlertId);
+      if (savedAlertId != alertId) {
+        print('⚠️ Alerte non sauvegardée correctement, nouvelle tentative...');
+        await StorageService.instance.saveString(AppConstants.keyCurrentAlertId, alertId);
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+
+      // Navigation UNIQUE et SÉCURISÉE vers l'écran d'alerte active
+      if (mounted) {
+        print('🧭 Navigation vers l\'écran d\'alerte active...');
         try {
           context.goNamed('victim_active_alert');
-        } catch (_) {
-          try { context.go(AppConstants.routeVictimActiveAlert); } catch (_) {}
-        }
-      });
-    }
-
-    // Exécuter le reste en arrière-plan pour éviter tout délai
-    Future(() async {
-      try {
-        if (AppConstants.enableLogging) {
-          print('🚨 Déclenchement de l\'alerte SOS (background)...');
-          print('👤 Utilisateur: ${authProvider.currentUser!.prenom} (ID: ${authProvider.currentUser!.id})');
-        }
-
-        // Vibration tactile
-        HapticFeedback.heavyImpact();
-        
-        // Animation d'urgence
-        _backgroundController.forward();
-
-        // Obtenir rapidement la dernière position connue, sinon (0,0)
-        Position? position;
-        double latitude = 0.0;
-        double longitude = 0.0;
-        try {
-          position = await GeolocationService.instance.getLastKnownPosition();
-          if (position != null) {
-            latitude = position.latitude;
-            longitude = position.longitude;
+        } catch (e) {
+          print('❌ Erreur navigation goNamed: $e');
+          try { 
+            context.go(AppConstants.routeVictimActiveAlert); 
+          } catch (e2) {
+            print('❌ Erreur navigation go: $e2');
+            throw Exception('Impossible de naviguer vers l\'écran d\'alerte');
           }
-        } catch (_) {}
-
-        // Lancer la récupération de position actuelle sans bloquer
-        Future(() async {
-          try { await GeolocationService.instance.getCurrentPosition(); } catch (_) {}
-        });
-
-        // Déclencher l'alerte (stockage local immédiat côté service)
-        final alertId = await AlertService.instance.createEmergencyAlert(
-          latitude: latitude,
-          longitude: longitude,
-          type: 'urgence',
-          dangerLevel: 5,
-        );
-
-        // Démarrer l'enregistrement automatique des preuves (meilleur effort)
-        if (alertId.isNotEmpty) {
-          try {
-            await EvidenceService.instance.startEvidenceRecording(alertId);
-            if (AppConstants.enableLogging) {
-              print('📹 Enregistrement des preuves démarré');
-            }
-          } catch (e) {
-            if (AppConstants.enableLogging) {
-              print('⚠️ Erreur enregistrement preuves: $e');
-            }
-          }
-        }
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('🚨 ALERTE DÉCLENCHÉE - Aide en route'),
-              backgroundColor: AppConstants.alertActiveColor,
-            ),
-          );
-        }
-      } catch (e) {
-        if (AppConstants.enableLogging) {
-          print('❌ Erreur lors du déclenchement de l\'alerte: $e');
-        }
-      } finally {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
         }
       }
-    });
+
+      // Continuer les opérations en arrière-plan (non bloquantes)
+      Future(() async {
+        try {
+          // Démarrer l'enregistrement automatique des preuves (meilleur effort)
+          if (alertId.isNotEmpty) {
+            try {
+              await EvidenceService.instance.startEvidenceRecording(alertId);
+              if (AppConstants.enableLogging) {
+                print('📹 Enregistrement des preuves démarré');
+              }
+            } catch (e) {
+              if (AppConstants.enableLogging) {
+                print('⚠️ Erreur enregistrement preuves: $e');
+              }
+            }
+          }
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('🚨 ALERTE DÉCLENCHÉE - Aide en route'),
+                backgroundColor: AppConstants.alertActiveColor,
+              ),
+            );
+          }
+        } catch (e) {
+          print('❌ Erreur lors des opérations en arrière-plan: $e');
+        }
+      });
+      
+    } catch (e) {
+      print('❌ Erreur lors du déclenchement de l\'alerte: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors du déclenchement: $e'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
     
   }
 

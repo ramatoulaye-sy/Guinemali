@@ -176,6 +176,7 @@ class AppRouter {
         name: 'victim_home',
         builder: (context, state) => const VictimHomeScreen(),
       ),
+      // Menu modal conservé; l'écran menu est supprimé
       
       // Nouvelle route dashboard des victimes
       GoRoute(

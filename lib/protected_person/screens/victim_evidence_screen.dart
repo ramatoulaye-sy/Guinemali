@@ -36,6 +36,7 @@ class _VictimEvidenceScreenState extends State<VictimEvidenceScreen> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   VideoPlayerController? _videoController;
   ChewieController? _chewieController;
+  bool _isCapturingPhoto = false;
 
   @override
   void initState() {
@@ -323,15 +324,20 @@ class _VictimEvidenceScreenState extends State<VictimEvidenceScreen> {
       );
 
       if (video != null) {
-        // Chiffrer le fichier
-        final encryptedPath = await _encryptFile(video.path);
-        
-        // Créer l'item de preuve
+        // Copier la vidéo du cache vers le stockage persistant
+        final docs = await getApplicationDocumentsDirectory();
+        final targetPath = p.join(docs.path, p.basename(video.path));
+        await File(video.path).copy(targetPath);
+
+        // Chiffrer une copie et conserver l'original en clair pour lecture locale
+        final encryptedPath = await _encryptFile(targetPath);
+
+        // Créer l'item de preuve en pointant originalPath vers app_flutter
         final evidenceItem = EvidenceItem(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
           type: EvidenceType.video,
           filePath: encryptedPath,
-          originalPath: video.path,
+          originalPath: targetPath,
           duration: const Duration(seconds: 0), // Durée à calculer si nécessaire
           size: await File(encryptedPath).length(),
           dateCreated: DateTime.now(),
@@ -339,6 +345,25 @@ class _VictimEvidenceScreenState extends State<VictimEvidenceScreen> {
           isSynced: false,
           alertId: _currentAlertId,
         );
+
+        // Sauvegarder en base locale pour qu'elle ne disparaisse pas après rafraîchissement
+        try {
+          final fileLen = await File(evidenceItem.originalPath).length();
+          await StorageService.instance.saveEvidence(
+            id: evidenceItem.id,
+            alertId: _currentAlertId ?? 'manual',
+            type: 'video',
+            filePath: evidenceItem.originalPath,
+            fileSize: fileLen,
+          );
+          await SyncService.instance.addToSyncQueue('evidence', {
+            'id': evidenceItem.id,
+            'alert_id': _currentAlertId ?? 'manual',
+            'type': 'video',
+            'file_path': evidenceItem.originalPath,
+            'file_size': fileLen,
+          });
+        } catch (_) {}
 
         _evidenceList.insert(0, evidenceItem);
         await _saveEvidenceList();
@@ -379,10 +404,7 @@ class _VictimEvidenceScreenState extends State<VictimEvidenceScreen> {
       final encryptedPath = '${filePath}_encrypted';
       final encryptedFile = File(encryptedPath);
       await encryptedFile.writeAsBytes(encryptedBytes);
-      
-      // Supprimer le fichier original
-      await file.delete();
-      
+
       return encryptedPath;
     } catch (e) {
       print('Erreur lors du chiffrement: $e');
@@ -815,7 +837,7 @@ class _VictimEvidenceScreenState extends State<VictimEvidenceScreen> {
                   // Ajouter à la file de synchronisation
                   await SyncService.instance.addToSyncQueue('evidence', {
                     'id': evidence.id,
-                    'alertId': evidence.alertId ?? 'manual',
+                    'alert_id': evidence.alertId ?? 'manual',
                     'type': evidence.type.toString().split('.').last,
                     'file_path': evidence.originalPath,
                     'file_size': evidence.size,
@@ -897,6 +919,8 @@ class _VictimEvidenceScreenState extends State<VictimEvidenceScreen> {
 
   Future<void> _takePhoto() async {
     try {
+      if (_isCapturingPhoto) return;
+      _isCapturingPhoto = true;
       final path = await EvidenceService.instance.takePhoto(_currentAlertId ?? 'manual');
       if (path != null) {
         await _loadEvidenceList();
@@ -906,6 +930,8 @@ class _VictimEvidenceScreenState extends State<VictimEvidenceScreen> {
       }
     } catch (e) {
       _showSnack('Erreur: $e', isError: true);
+    } finally {
+      _isCapturingPhoto = false;
     }
   }
 

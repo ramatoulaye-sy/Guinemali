@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:guinemali/core/services/a11y_service.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:guinemali/core/services/location_tracking_service.dart';
 import 'package:guinemali/core/services/storage_service.dart';
 import 'package:guinemali/core/services/security_service.dart';
 import 'package:guinemali/core/constants/app_constants.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:go_router/go_router.dart';
+import 'package:guinemali/core/services/sync_service.dart';
+import 'package:guinemali/protected_person/widgets/menu_modal.dart';
 
 class VictimSettingsScreen extends StatefulWidget {
   const VictimSettingsScreen({super.key});
@@ -64,6 +69,14 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
     // lancer après premier frame pour l'effet de rebond
     WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) _fabCtrl.forward(); });
   }
+
+  // High-contrast only; otherwise keep original light design
+  bool get _isHighContrast => StorageService.instance.getBool('a11y_high_contrast', defaultValue: false);
+  Color get _iconColor => AppConstants.primaryColor;
+  Color get _titleColor => _isHighContrast ? Colors.white : Colors.black87;
+  Color get _subtitleColor => _isHighContrast ? Colors.white70 : Colors.black54;
+  Color get _cardColor => _isHighContrast ? const Color(0xFF121212) : Colors.white;
+  Color get _chipBg => _isHighContrast ? Colors.white12 : AppConstants.primaryColor.withOpacity(0.1);
 
   void _openAppLockDialog(BuildContext context) async {
     final method = await SecurityService.instance.getLockMethod();
@@ -351,34 +364,51 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
   
 
   void _showDeleteAccountDialog() {
+    final confirmCtrl = TextEditingController();
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Supprimer le compte'),
-        content: const Text(
-          'Cette action supprimera définitivement votre compte et toutes vos données. Cette action est irréversible.',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: const Text('Supprimer le compte'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Tapez SUPPRIMER pour confirmer la suppression définitive.'),
+              const SizedBox(height: 12),
+              TextField(
+                controller: confirmCtrl,
+                decoration: const InputDecoration(
+                  hintText: 'SUPPRIMER',
+                  border: OutlineInputBorder(),
+                  filled: true,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Annuler')),
+            ElevatedButton(
+              onPressed: confirmCtrl.text.trim().toUpperCase() == 'SUPPRIMER'
+                  ? () async {
+                      Navigator.of(ctx).pop();
+                      await _deleteAccount();
+                      A11yService.announceIfEnabled(context, 'Compte supprimé');
+                    }
+                  : null,
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text('Supprimer', style: TextStyle(color: Colors.white)),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Annuler'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              _deleteAccount();
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Supprimer', style: TextStyle(color: Colors.white)),
-          ),
-        ],
       ),
     );
   }
 
   Future<void> _deleteAccount() async {
     try {
-      // Supprimer toutes les données locales
+      // Purge complète: préférences + base SQLite locale
+      await StorageService.instance.clearDatabase();
       await StorageService.instance.clear();
       
       if (mounted) {
@@ -429,6 +459,125 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
     );
   }
 
+  Future<void> _showChangePinDialog() async {
+    final currentCtrl = TextEditingController();
+    final newCtrl = TextEditingController();
+    final confirmCtrl = TextEditingController();
+    bool obscure = true;
+    String? error;
+    await showDialog(
+      context: context,
+      builder: (ctx) => Theme(
+        data: Theme.of(context).copyWith(
+          dialogBackgroundColor: Colors.white,
+          inputDecorationTheme: const InputDecorationTheme(
+            filled: true,
+            fillColor: Colors.white,
+            labelStyle: TextStyle(color: Colors.black87),
+            hintStyle: TextStyle(color: Colors.black54),
+            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            border: OutlineInputBorder(),
+            enabledBorder: OutlineInputBorder(
+              borderSide: BorderSide(color: Color(0xFFBDBDBD)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderSide: BorderSide(color: Color(0xFF945ACB), width: 2),
+            ),
+          ),
+          textTheme: Theme.of(context).textTheme.apply(
+                bodyColor: Colors.black87,
+                displayColor: Colors.black87,
+              ),
+          iconTheme: const IconThemeData(color: Colors.black87),
+        ),
+        child: StatefulBuilder(
+          builder: (ctx, setState) => AlertDialog(
+            backgroundColor: Colors.white,
+            title: const Text('Changer le code PIN', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.black87)),
+            scrollable: true,
+            insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+            contentPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: currentCtrl,
+                  keyboardType: TextInputType.number,
+                  obscureText: obscure,
+                  maxLength: 6,
+                  style: const TextStyle(color: Colors.black87),
+                  cursorColor: Colors.black87,
+                  decoration: InputDecoration(
+                    labelText: 'PIN actuel',
+                    errorText: error,
+                    suffixIcon: IconButton(
+                      icon: Icon(obscure ? Icons.visibility_off : Icons.visibility, color: Colors.black54),
+                      onPressed: () => setState(() => obscure = !obscure),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: newCtrl,
+                  keyboardType: TextInputType.number,
+                  obscureText: obscure,
+                  maxLength: 6,
+                  style: const TextStyle(color: Colors.black87),
+                  cursorColor: Colors.black87,
+                  decoration: const InputDecoration(labelText: 'Nouveau PIN (4–6 chiffres)'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: confirmCtrl,
+                  keyboardType: TextInputType.number,
+                  obscureText: obscure,
+                  maxLength: 6,
+                  style: const TextStyle(color: Colors.black87),
+                  cursorColor: Colors.black87,
+                  decoration: const InputDecoration(labelText: 'Confirmer le nouveau PIN'),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Annuler', style: TextStyle(color: Colors.black87))),
+              ElevatedButton(
+                onPressed: () async {
+                final pinOld = currentCtrl.text.trim();
+                final pinNew = newCtrl.text.trim();
+                final pinConfirm = confirmCtrl.text.trim();
+                final re = RegExp(r'^\d{4,6}$');
+                if (!re.hasMatch(pinNew)) {
+                  setState(() => error = 'Le PIN doit contenir 4 à 6 chiffres');
+                  return;
+                }
+                if (pinNew != pinConfirm) {
+                  setState(() => error = 'Les deux PIN ne correspondent pas');
+                  return;
+                }
+                try {
+                  final ok = await SecurityService.instance.verifyPin(pinOld);
+                  if (!ok) {
+                    setState(() => error = 'PIN actuel incorrect');
+                    return;
+                  }
+                  await SecurityService.instance.savePin(pinNew);
+                  if (!mounted) return;
+                  Navigator.of(ctx).pop();
+                  _showSavedSnack('Code PIN mis à jour');
+                  A11yService.announceIfEnabled(context, 'Code PIN mis à jour');
+                } catch (e) {
+                  setState(() => error = 'Erreur: $e');
+                }
+                },
+                child: const Text('Enregistrer'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _contactONG() async {
     final Uri emailUri = Uri(
       scheme: 'mailto',
@@ -461,20 +610,7 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
         ),
         child: _buildProfessionalBody(),
       ),
-      floatingActionButton: ScaleTransition(
-        scale: _fabScale,
-        child: FloatingActionButton.extended(
-          onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Paramètres sauvegardés'), backgroundColor: AppConstants.successColor),
-            );
-          },
-          backgroundColor: AppConstants.primaryColor,
-          foregroundColor: Colors.white,
-          icon: const Icon(Icons.check_rounded),
-          label: const Text('Valider'),
-        ),
-      ),
+      // FAB retiré pour éviter la redondance avec le bouton principal de sauvegarde
     );
   }
 
@@ -611,79 +747,171 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
   List<Widget> _buildConnectivityTiles() {
     return [
       ListTile(
-        leading: const Icon(Icons.wifi_off, color: AppConstants.primaryColor),
-        title: const Text('Configuration Mode Hors-ligne', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black87)),
-        subtitle: const Text('Configurer le comportement en cas de perte de connexion', style: TextStyle(color: Colors.black54)),
+        leading: Icon(Icons.wifi_off, color: _iconColor),
+        title: Text('Configuration Mode Hors-ligne', style: TextStyle(fontWeight: FontWeight.w600, color: _titleColor)),
+        subtitle: Text('Configurer le comportement en cas de perte de connexion', style: TextStyle(color: _subtitleColor)),
         trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.black45),
         onTap: _configureOfflineMode,
       ),
       ListTile(
-        leading: const Icon(Icons.message, color: AppConstants.primaryColor),
-        title: const Text('Message SOS Personnalisé', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black87)),
+        leading: Icon(Icons.message, color: _iconColor),
+        title: Text('Message SOS Personnalisé', style: TextStyle(fontWeight: FontWeight.w600, color: _titleColor)),
         subtitle: Text(
           _customSosMessage.isEmpty ? 'Entrez votre message personnalisé' : '${_customSosMessage.substring(0, _customSosMessage.length > 30 ? 30 : _customSosMessage.length)}...',
-          style: const TextStyle(color: Colors.black54),
+          style: TextStyle(color: _subtitleColor),
         ),
         trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.black45),
         onTap: _configureSosMessage,
       ),
       ListTile(
-        leading: const Icon(Icons.sync, color: AppConstants.primaryColor),
-        title: const Text('Synchronisation des Preuves', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black87)),
-        subtitle: const Text('Configurer l\'envoi automatique des preuves', style: TextStyle(color: Colors.black54)),
+        leading: Icon(Icons.sync, color: _iconColor),
+        title: Text('Synchronisation des Preuves', style: TextStyle(fontWeight: FontWeight.w600, color: _titleColor)),
+        subtitle: Text('Configurer l\'envoi automatique des preuves', style: TextStyle(color: _subtitleColor)),
         trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.black45),
         onTap: _configureSyncSettings,
+      ),
+      ListTile(
+        leading: Icon(Icons.sync_problem, color: _iconColor),
+        title: Text('Synchroniser maintenant', style: TextStyle(fontWeight: FontWeight.w600, color: _titleColor)),
+        subtitle: Text('Force l\'envoi immédiat des éléments en attente', style: TextStyle(color: _subtitleColor)),
+        trailing: const Icon(Icons.play_arrow_rounded, size: 20, color: Colors.black45),
+        onTap: () async {
+          if (!mounted) return;
+          try {
+            final wasOnline = SyncService.instance.isOnline;
+            if (!wasOnline) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Hors-ligne: la synchronisation sera tentée dès le retour en ligne')),
+              );
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Synchronisation démarrée…')),
+              );
+            }
+            await SyncService.instance.forceSync();
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Synchronisation terminée')),
+            );
+          } catch (e) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Erreur de synchronisation: $e')),
+            );
+          }
+        },
       ),
     ];
   }
 
   /// Tiles: Langue & Accessibilité
   List<Widget> _buildLanguageAccessibilityTiles() {
+    final titleStyle = TextStyle(fontWeight: FontWeight.w600, color: _titleColor);
+    final subtitleStyle = TextStyle(color: _subtitleColor);
     return [
-      ListTile(
-        leading: const Icon(Icons.language, color: AppConstants.primaryColor),
-        title: const Text('Langue de l\'Application', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black87)),
-        subtitle: Text(_getLanguageName(_selectedLanguage), style: const TextStyle(color: Colors.black54)),
-        trailing: DropdownButton<String>(
-          value: _selectedLanguage,
-          onChanged: (v) {
-            if (v == null) return;
-            setState(() => _selectedLanguage = v);
-            _saveStringSetting('selected_language', v);
-            _showSavedSnack('Langue: ${_getLanguageName(v)}');
-          },
-          items: const [
-            DropdownMenuItem(value: 'fr', child: Text('Français')),
-            DropdownMenuItem(value: 'sus', child: Text('Soussou')),
-            DropdownMenuItem(value: 'ff', child: Text('Peulh')),
-            DropdownMenuItem(value: 'mlq', child: Text('Malinké')),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Icon(Icons.language, color: _iconColor),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Langue de l\'Application',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: titleStyle,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(_getLanguageName(_selectedLanguage), style: subtitleStyle),
+            const SizedBox(height: 8),
+            DropdownButtonHideUnderline(
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFE0E0E0)),
+                ),
+                child: DropdownButton<String>(
+                  isExpanded: true,
+                  value: _selectedLanguage,
+                  dropdownColor: Colors.white,
+                  iconEnabledColor: _iconColor,
+                  style: titleStyle,
+                  onChanged: (_selectedLanguage == 'system') ? null : (v) {
+                    if (v == null) return;
+                    setState(() => _selectedLanguage = v);
+                    _saveStringSetting('selected_language', v);
+                    _showSavedSnack('Langue: ${_getLanguageName(v)}');
+                  },
+                  items: const [
+                    DropdownMenuItem(value: 'system', child: Text('Langue du Système')),
+                    DropdownMenuItem(value: 'fr', child: Text('Français')),
+                    DropdownMenuItem(value: 'sus', child: Text('Soussou')),
+                    DropdownMenuItem(value: 'ff', child: Text('Peulh')),
+                    DropdownMenuItem(value: 'mlq', child: Text('Malinké')),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),
+      SwitchListTile(
+        title: Text('Suivre la langue du système', style: titleStyle),
+        value: _selectedLanguage == 'system',
+        onChanged: (v) {
+          setState(() => _selectedLanguage = v ? 'system' : 'fr');
+          _saveStringSetting('selected_language', _selectedLanguage);
+          _showSavedSnack(v ? 'Langue: Système' : 'Langue: Français');
+        },
+      ),
       ListTile(
-        leading: const Icon(Icons.text_fields, color: AppConstants.primaryColor),
-        title: const Text('Taille du Texte', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black87)),
-        subtitle: Text(_getTextSizeName(_textSize), style: const TextStyle(color: Colors.black54)),
-        trailing: DropdownButton<String>(
-          value: _textSize,
-          onChanged: (v) {
-            if (v == null) return;
-            setState(() => _textSize = v);
-            _saveStringSetting('text_size', v);
-            _showSavedSnack('Taille du texte: ${_getTextSizeName(v)}');
-          },
-          items: const [
-            DropdownMenuItem(value: 'small', child: Text('Petit')),
-            DropdownMenuItem(value: 'normal', child: Text('Normal')),
-            DropdownMenuItem(value: 'large', child: Text('Grand')),
-            DropdownMenuItem(value: 'xlarge', child: Text('Très Grand')),
-          ],
+        leading: Icon(Icons.text_fields, color: _iconColor),
+        title: Text('Taille du Texte', style: titleStyle),
+        subtitle: Text(_getTextSizeName(_textSize), style: subtitleStyle),
+        trailing: DropdownButtonHideUnderline(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFE0E0E0)),
+            ),
+            child: DropdownButton<String>(
+              value: _textSize,
+              dropdownColor: Colors.white,
+              iconEnabledColor: _iconColor,
+              style: titleStyle,
+              onChanged: (v) {
+                if (v == null) return;
+                setState(() => _textSize = v);
+                _saveStringSetting('text_size', v);
+                _showSavedSnack('Taille du texte: ${_getTextSizeName(v)}');
+              },
+              items: const [
+                DropdownMenuItem(value: 'small', child: Text('Petit')),
+                DropdownMenuItem(value: 'normal', child: Text('Normal')),
+                DropdownMenuItem(value: 'large', child: Text('Grand')),
+                DropdownMenuItem(value: 'xlarge', child: Text('Très Grand')),
+              ],
+            ),
+          ),
         ),
       ),
       ListTile(
-        leading: const Icon(Icons.contrast, color: AppConstants.primaryColor),
-        title: const Text('Configuration d\'Accessibilité', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black87)),
-        subtitle: const Text('Contraste, lecture vocale, mode sombre', style: TextStyle(color: Colors.black54)),
+        leading: Icon(Icons.contrast, color: _iconColor),
+        title: Text('Configuration d\'Accessibilité', style: titleStyle),
+        subtitle: Text('Contraste, lecture vocale, mode sombre', style: subtitleStyle),
         trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.black45),
         onTap: _configureAccessibility,
       ),
@@ -694,28 +922,64 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
   List<Widget> _buildLocationAlertsTiles() {
     return [
       ListTile(
-        leading: const Icon(Icons.gps_fixed, color: AppConstants.primaryColor),
-        title: const Text('Configuration GPS', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black87)),
-        subtitle: const Text('Paramètres de localisation et fréquence', style: TextStyle(color: Colors.black54)),
+        leading: Icon(Icons.gps_fixed, color: _iconColor),
+        title: Text('Configuration GPS', style: TextStyle(fontWeight: FontWeight.w600, color: _titleColor)),
+        subtitle: Text('Paramètres de localisation et fréquence', style: TextStyle(color: _subtitleColor)),
         trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.black45),
         onTap: _configureGpsSettings,
       ),
-      ListTile(
-        leading: const Icon(Icons.notifications, color: AppConstants.primaryColor),
-        title: const Text('Configuration des Notifications', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black87)),
-        subtitle: Text(_getNotificationTypeName(_notificationType), style: const TextStyle(color: Colors.black54)),
-        trailing: DropdownButton<String>(
-          value: _notificationType,
-          onChanged: (v) {
-            if (v == null) return;
-            setState(() => _notificationType = v);
-            _saveStringSetting('notification_type', v);
-            _showSavedSnack('Notifications: ${_getNotificationTypeName(v)}');
-          },
-          items: const [
-            DropdownMenuItem(value: 'push', child: Text('Notifications Push')),
-            DropdownMenuItem(value: 'sms', child: Text('SMS')),
-            DropdownMenuItem(value: 'both', child: Text('Push + SMS')),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: const [
+                Icon(Icons.notifications, color: AppConstants.primaryColor),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Configuration des Notifications',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black87),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(_getNotificationTypeName(_notificationType), style: const TextStyle(color: Colors.black54)),
+            const SizedBox(height: 8),
+            DropdownButtonHideUnderline(
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFE0E0E0)),
+                ),
+                child: DropdownButton<String>(
+                  isExpanded: true,
+                  value: _notificationType,
+                  dropdownColor: Colors.white,
+                  iconEnabledColor: AppConstants.primaryColor,
+                  style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w600),
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() => _notificationType = v);
+                    _saveStringSetting('notification_type', v);
+                    _showSavedSnack('Notifications: ${_getNotificationTypeName(v)}');
+                  },
+                  items: const [
+                    DropdownMenuItem(value: 'push', child: Text('Notifications Push')),
+                    DropdownMenuItem(value: 'sms', child: Text('SMS')),
+                    DropdownMenuItem(value: 'both', child: Text('Push + SMS')),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -733,10 +997,10 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
   List<Widget> _buildAccountUsageTiles() {
     return [
       ListTile(
-        leading: const Icon(Icons.person),
-        title: const Text('Pseudo', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600)),
-        subtitle: Text(_userPseudo.isEmpty ? 'Votre nom d\'utilisateur' : _userPseudo, style: const TextStyle(color: Colors.black54)),
-        trailing: const Icon(Icons.edit, color: Colors.black45),
+        leading: Icon(Icons.person, color: _iconColor),
+        title: Text('Pseudo', style: TextStyle(color: _titleColor, fontWeight: FontWeight.w600)),
+        subtitle: Text(_userPseudo.isEmpty ? 'Votre nom d\'utilisateur' : _userPseudo, style: TextStyle(color: _subtitleColor)),
+        trailing: const Icon(Icons.edit, color: Colors.grey),
         onTap: () async {
           final controller = TextEditingController(text: _userPseudo);
           await showDialog(
@@ -751,10 +1015,16 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
                 TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Annuler')),
                 ElevatedButton(
                   onPressed: () {
-                    setState(() => _userPseudo = controller.text.trim());
+                    final txt = controller.text.trim();
+                    if (txt.length < 2 || txt.length > 32) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Le pseudo doit contenir 2 à 32 caractères')));
+                      return;
+                    }
+                    setState(() => _userPseudo = txt);
                     _saveStringSetting('user_pseudo', _userPseudo);
                     Navigator.of(ctx).pop();
                     _showSavedSnack('Pseudo mis à jour');
+                    A11yService.announceIfEnabled(context, 'Pseudo mis à jour');
                   },
                   child: const Text('Enregistrer'),
                 ),
@@ -764,9 +1034,9 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
         },
       ),
       ListTile(
-        leading: const Icon(Icons.language),
-        title: const Text('Langue d\'Utilisation', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600)),
-        subtitle: Text(_getLanguageName(_userLanguage), style: const TextStyle(color: Colors.black54)),
+        leading: Icon(Icons.language, color: _iconColor),
+        title: Text('Langue d\'Utilisation', style: TextStyle(color: _titleColor, fontWeight: FontWeight.w600)),
+        subtitle: Text(_getLanguageName(_userLanguage), style: TextStyle(color: _subtitleColor)),
         trailing: DropdownButton<String>(
           value: _userLanguage,
           onChanged: (v) {
@@ -784,30 +1054,30 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
         ),
       ),
       ListTile(
-        leading: const Icon(Icons.lock),
-        title: const Text('Changer le Code PIN', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600)),
-        subtitle: const Text('Modifier votre code de sécurité', style: TextStyle(color: Colors.black54)),
+        leading: Icon(Icons.lock, color: _iconColor),
+        title: Text('Changer le Code PIN', style: TextStyle(color: _titleColor, fontWeight: FontWeight.w600)),
+        subtitle: Text('Modifier votre code de sécurité', style: TextStyle(color: _subtitleColor)),
         trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.black45),
-        onTap: () => _openAppLockDialog(context),
+        onTap: _showChangePinDialog,
       ),
       ListTile(
-        leading: const Icon(Icons.privacy_tip),
-        title: const Text('Politique de Confidentialité', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600)),
-        subtitle: const Text('Lire nos conditions d\'utilisation', style: TextStyle(color: Colors.black54)),
+        leading: Icon(Icons.privacy_tip, color: _iconColor),
+        title: Text('Politique de Confidentialité', style: TextStyle(color: _titleColor, fontWeight: FontWeight.w600)),
+        subtitle: Text('Lire nos conditions d\'utilisation', style: TextStyle(color: _subtitleColor)),
         trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.black45),
         onTap: _showPrivacyPolicy,
       ),
       ListTile(
-        leading: const Icon(Icons.delete_forever_outlined, color: Colors.orange),
-        title: const Text('Droit à l\'Oubli', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600)),
-        subtitle: const Text('Demander la suppression de vos données', style: TextStyle(color: Colors.black54)),
+        leading: Icon(Icons.delete_forever_outlined, color: Colors.orange.shade700),
+        title: Text('Droit à l\'Oubli', style: TextStyle(color: _titleColor, fontWeight: FontWeight.w600)),
+        subtitle: Text('Demander la suppression de vos données', style: TextStyle(color: _subtitleColor)),
         trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.black45),
         onTap: _showRightToForgetDialog,
       ),
       ListTile(
-        leading: const Icon(Icons.delete_forever, color: Colors.red),
-        title: const Text('Supprimer le Compte', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600)),
-        subtitle: const Text('Supprimer définitivement votre compte', style: TextStyle(color: Colors.black54)),
+        leading: Icon(Icons.delete_forever, color: Colors.red.shade700),
+        title: Text('Supprimer le Compte', style: TextStyle(color: _titleColor, fontWeight: FontWeight.w600)),
+        subtitle: Text('Supprimer définitivement votre compte', style: TextStyle(color: _subtitleColor)),
         trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.black45),
         onTap: _showDeleteAccountDialog,
       ),
@@ -818,15 +1088,15 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
   List<Widget> _buildTechnicalHelpTiles() {
     return [
       ListTile(
-        leading: const Icon(Icons.info),
-        title: const Text('Version de l\'Application', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600)),
-        subtitle: Text(_appVersion, style: const TextStyle(color: Colors.black54)),
+        leading: Icon(Icons.info, color: _iconColor),
+        title: Text('Version de l\'Application', style: TextStyle(color: _titleColor, fontWeight: FontWeight.w600)),
+        subtitle: Text(_appVersion, style: TextStyle(color: _subtitleColor)),
       ),
       SwitchListTile(
-        title: const Text('Mises à Jour Automatiques', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600)),
-        subtitle: const Text('Télécharger automatiquement les mises à jour', style: TextStyle(color: Colors.black54)),
+        title: Text('Mises à Jour Automatiques', style: TextStyle(color: _titleColor, fontWeight: FontWeight.w600)),
+        subtitle: Text('Télécharger automatiquement les mises à jour', style: TextStyle(color: _subtitleColor)),
         value: _autoUpdates,
-        secondary: const Icon(Icons.system_update),
+        secondary: Icon(Icons.system_update, color: _iconColor),
         activeColor: AppConstants.primaryColor,
         onChanged: (value) {
           setState(() => _autoUpdates = value);
@@ -834,17 +1104,48 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
           _showSavedSnack('Mises à jour auto ${value ? 'activées' : 'désactivées'}');
         },
       ),
+      // Accès direct au Centre d'Aide complet
       ListTile(
-        leading: const Icon(Icons.school),
-        title: const Text('Tutoriel d\'Utilisation', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600)),
-        subtitle: const Text('Apprendre à utiliser l\'application', style: TextStyle(color: Colors.black54)),
+        leading: Icon(Icons.support, color: _iconColor),
+        title: Text('Centre d\'Aide', style: TextStyle(color: _titleColor, fontWeight: FontWeight.w600)),
+        subtitle: Text('Email, téléphone, FAQ, manuel', style: TextStyle(color: _subtitleColor)),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.black45),
+        onTap: () => context.push(AppConstants.routeVictimHelp),
+      ),
+      // Diagnostic Permissions (GPS/SMS/Stockage)
+      ListTile(
+        leading: Icon(Icons.privacy_tip, color: _iconColor),
+        title: Text('Diagnostiquer les Permissions', style: TextStyle(color: _titleColor, fontWeight: FontWeight.w600)),
+        subtitle: Text('Vérifier GPS, SMS, stockage', style: TextStyle(color: _subtitleColor)),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.black45),
+        onTap: () => context.push(AppConstants.routePermissions),
+      ),
+      // Test Notifications
+      ListTile(
+        leading: Icon(Icons.notifications_active, color: _iconColor),
+        title: Text('Tester les Notifications', style: TextStyle(color: _titleColor, fontWeight: FontWeight.w600)),
+        subtitle: Text('Simuler selon votre mode (Push/SMS)', style: TextStyle(color: _subtitleColor)),
+        trailing: const Icon(Icons.play_arrow_rounded, size: 20, color: Colors.black45),
+        onTap: () {
+          final mode = StorageService.instance.getString('notification_type') ?? 'push';
+          final label = mode == 'both' ? 'Push + SMS' : (mode == 'sms' ? 'SMS' : 'Push');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Test notifications: $label')),
+          );
+          A11yService.announceIfEnabled(context, 'Test notifications: $label');
+        },
+      ),
+      ListTile(
+        leading: Icon(Icons.school, color: _iconColor),
+        title: Text('Tutoriel d\'Utilisation', style: TextStyle(color: _titleColor, fontWeight: FontWeight.w600)),
+        subtitle: Text('Apprendre à utiliser l\'application', style: TextStyle(color: _subtitleColor)),
         trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.black45),
         onTap: _showTutorial,
       ),
       ListTile(
-        leading: const Icon(Icons.support_agent),
-        title: const Text('Contacter l\'ONG', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600)),
-        subtitle: const Text('Obtenir de l\'aide et du support', style: TextStyle(color: Colors.black54)),
+        leading: Icon(Icons.support_agent, color: _iconColor),
+        title: Text('Contacter l\'ONG', style: TextStyle(color: _titleColor, fontWeight: FontWeight.w600)),
+        subtitle: Text('Obtenir de l\'aide et du support', style: TextStyle(color: _subtitleColor)),
         trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.black45),
         onTap: _contactONG,
       ),
@@ -862,10 +1163,10 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppConstants.primaryColor.withOpacity(0.1),
+        color: _cardColor,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: AppConstants.primaryColor.withOpacity(0.3),
+          color: Theme.of(context).dividerColor.withOpacity(0.2),
           width: 1,
         ),
       ),
@@ -874,24 +1175,24 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
           Icon(
             Icons.settings,
             size: 48,
-            color: AppConstants.primaryColor,
+            color: _iconColor,
           ),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             'Configuration de l\'Application',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: AppConstants.blackColor,
+              color: _titleColor,
             ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Personnalisez votre expérience et configurez les paramètres de sécurité selon vos besoins.',
             style: TextStyle(
               fontSize: 14,
-              color: AppConstants.blackColor,
+              color: _subtitleColor,
             ),
             textAlign: TextAlign.center,
           ),
@@ -914,11 +1215,11 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOut,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _cardColor,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: expanded ? AppConstants.secondaryColor.withOpacity(0.25) : Colors.black.withOpacity(0.08),
+            color: Colors.black.withOpacity(0.08),
             blurRadius: expanded ? 22 : 16,
             spreadRadius: expanded ? 1 : 0,
             offset: const Offset(0, 6),
@@ -936,27 +1237,27 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
           leading: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppConstants.primaryColor.withOpacity(0.1),
+              color: _chipBg,
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: AppConstants.primaryColor, size: 20),
+            child: Icon(icon, color: _iconColor, size: 20),
           ),
           title: Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w700,
-              color: AppConstants.primaryColor,
+              color: _iconColor,
             ),
           ),
           trailing: Icon(
             expanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-            color: AppConstants.primaryColor,
+            color: _iconColor,
           ),
           children: [
             ListTileTheme(
-              textColor: Colors.black87,
-              iconColor: AppConstants.primaryColor,
+              textColor: _titleColor,
+              iconColor: _iconColor,
               child: Column(children: children),
             ),
           ],
@@ -977,6 +1278,7 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
         ),
       ),
     );
+    A11yService.announceIfEnabled(context, message);
   }
 
   // Méthodes de configuration fonctionnelles
@@ -1163,16 +1465,38 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
                 children: [
                   const Text('Intervalle (min): ', style: TextStyle(color: Colors.black87)),
                   Expanded(
-                    child: Slider(
-                      min: 5,
-                      max: 120,
-                      divisions: 23,
-                      value: syncIntervalMin.toDouble(),
-                      label: '$syncIntervalMin',
-                      onChanged: (v) => setState(() => syncIntervalMin = v.round()),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Slider(
+                          min: 5,
+                          max: 120,
+                          divisions: 23,
+                          value: syncIntervalMin.toDouble(),
+                          label: '$syncIntervalMin min',
+                          onChanged: (v) => setState(() => syncIntervalMin = v.round()),
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: const [
+                            Text('5', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                            Text('120', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  Text('$syncIntervalMin min', style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w600)),
                 ],
+              ),
+              const SizedBox(height: 8),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'S’applique à la synchronisation automatique quand vous êtes en ligne.',
+                  style: TextStyle(fontSize: 12, color: Colors.black54),
+                ),
               ),
             ],
             ),
@@ -1183,7 +1507,7 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
           ElevatedButton(
             onPressed: () async {
               await StorageService.instance.saveBool('sync_proofs_auto', autoSyncProofs);
-              await StorageService.instance.saveString('sync_interval_min', syncIntervalMin.toString());
+              await StorageService.instance.setInt('sync_interval_min', syncIntervalMin);
               if (mounted) {
                 Navigator.of(ctx).pop();
                 _showSavedSnack('Synchronisation sauvegardée');
@@ -1199,6 +1523,8 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
   Future<void> _configureAccessibility() async {
     bool highContrast = StorageService.instance.getBool('a11y_high_contrast', defaultValue: false);
     bool ttsHints = StorageService.instance.getBool('a11y_tts_hints', defaultValue: false);
+    bool reduceMotion = StorageService.instance.getBool('a11y_reduce_motion', defaultValue: false);
+    bool readableFont = StorageService.instance.getBool('a11y_readable_font', defaultValue: false);
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1223,6 +1549,80 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
                 value: ttsHints,
                 onChanged: (v) => setState(() => ttsHints = v),
               ),
+              SwitchListTile(
+                title: const Text('Réduire les animations', style: TextStyle(color: Colors.black87)),
+                subtitle: const Text('Diminue les mouvements pour limiter l’inconfort visuel', style: TextStyle(color: Colors.black54)),
+                value: reduceMotion,
+                onChanged: (v) => setState(() => reduceMotion = v),
+              ),
+              SwitchListTile(
+                title: const Text('Police plus lisible', style: TextStyle(color: Colors.black87)),
+                subtitle: const Text('Augmente l’espacement et l’épaisseur des textes', style: TextStyle(color: Colors.black54)),
+                value: readableFont,
+                onChanged: (v) => setState(() => readableFont = v),
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Aperçu',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.black87,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: highContrast ? Colors.black : const Color(0xFFF7F7F7),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: highContrast ? Colors.white : const Color(0xFFE0E0E0)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Lisibilité du texte',
+                      style: TextStyle(
+                        color: highContrast ? Colors.yellow : Colors.black87,
+                        fontSize: 16,
+                        fontWeight: readableFont ? FontWeight.w700 : FontWeight.w500,
+                        letterSpacing: readableFont ? 0.4 : 0.0,
+                        height: readableFont ? 1.35 : 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        AnimatedOpacity(
+                          opacity: reduceMotion ? 1.0 : 1.0,
+                          duration: Duration(milliseconds: reduceMotion ? 0 : 250),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: highContrast ? Colors.white : Colors.white,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: highContrast ? Colors.yellow : const Color(0xFFE0E0E0)),
+                            ),
+                            child: Text(
+                              reduceMotion ? 'Animations réduites' : 'Animations normales',
+                              style: TextStyle(
+                                color: highContrast ? Colors.black : Colors.black87,
+                                fontWeight: readableFont ? FontWeight.w700 : FontWeight.w500,
+                                letterSpacing: readableFont ? 0.3 : 0.0,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ],
             ),
           ),
@@ -1233,6 +1633,8 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
             onPressed: () async {
               await StorageService.instance.saveBool('a11y_high_contrast', highContrast);
               await StorageService.instance.saveBool('a11y_tts_hints', ttsHints);
+              await StorageService.instance.saveBool('a11y_reduce_motion', reduceMotion);
+              await StorageService.instance.saveBool('a11y_readable_font', readableFont);
               if (mounted) {
                 Navigator.of(ctx).pop();
                 _showSavedSnack('Accessibilité sauvegardée');
@@ -1249,6 +1651,9 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
     bool gpsEnabled = StorageService.instance.getBool('gps_enabled', defaultValue: false);
     String accuracy = StorageService.instance.getString('gps_accuracy') ?? 'balanced';
     int interval = StorageService.instance.getInt('gps_interval_sec', defaultValue: 60);
+    String permStatus = await _getLocationPermissionStatusLabel();
+    final lastPos = StorageService.instance.getString('gps_last_position') ?? '—';
+    final lastSync = StorageService.instance.getString('gps_last_sync') ?? '—';
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1267,6 +1672,20 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
                 title: const Text('Activer le suivi GPS', style: TextStyle(color: Colors.black87)),
                 value: gpsEnabled,
                 onChanged: (v) => setState(() => gpsEnabled = v),
+              ),
+              Row(
+                children: [
+                  const Icon(Icons.shield_moon, size: 18, color: Colors.black54),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text('Permissions: $permStatus', style: const TextStyle(color: Colors.black54))),
+                  TextButton(
+                    onPressed: () async {
+                      final ok = await _ensureLocationPermissions(ctx);
+                      setState(() => permStatus = ok ? 'OK' : 'À corriger');
+                    },
+                    child: const Text('Vérifier'),
+                  ),
+                ],
               ),
               ListTile(
                 contentPadding: EdgeInsets.zero,
@@ -1296,7 +1715,16 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
                     ),
                   ),
                 ],
-              )
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Dernière position: $lastPos', style: const TextStyle(color: Colors.black54, fontSize: 12)),
+              ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Dernière sync: $lastSync', style: const TextStyle(color: Colors.black54, fontSize: 12)),
+              ),
             ],
             ),
           ),
@@ -1308,6 +1736,17 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
               await StorageService.instance.saveBool('gps_enabled', gpsEnabled);
               await StorageService.instance.saveString('gps_accuracy', accuracy);
               await StorageService.instance.saveString('gps_interval_sec', interval.toString());
+              try {
+                if (gpsEnabled) {
+                  await LocationTrackingService.instance.start(accuracy: accuracy, intervalSec: interval);
+                } else {
+                  await LocationTrackingService.instance.stop();
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('GPS: $e')));
+                }
+              }
               if (mounted) {
                 Navigator.of(ctx).pop();
                 _showSavedSnack('Paramètres GPS sauvegardés');
@@ -1318,6 +1757,41 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
         ],
       ),
     );
+  }
+
+  Future<String> _getLocationPermissionStatusLabel() async {
+    final service = await Geolocator.isLocationServiceEnabled();
+    final perm = await Geolocator.checkPermission();
+    if (!service) return 'Services désactivés';
+    switch (perm) {
+      case LocationPermission.always:
+        return 'OK (toujours)';
+      case LocationPermission.whileInUse:
+        return 'OK (en usage)';
+      case LocationPermission.deniedForever:
+        return 'Refusé définitivement';
+      case LocationPermission.denied:
+        return 'Refusé';
+      default:
+        return 'Inconnu';
+    }
+  }
+
+  Future<bool> _ensureLocationPermissions(BuildContext ctx) async {
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      _showSavedSnack('Activez le GPS dans les paramètres');
+      return false;
+    }
+    var perm = await Geolocator.checkPermission();
+    if (perm == LocationPermission.denied) {
+      perm = await Geolocator.requestPermission();
+    }
+    if (perm == LocationPermission.deniedForever) {
+      _showSavedSnack('Permission refusée définitivement. Ouvrez les paramètres.');
+      await Geolocator.openAppSettings();
+      return false;
+    }
+    return perm == LocationPermission.always || perm == LocationPermission.whileInUse;
   }
 
   
@@ -1344,13 +1818,18 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
         onPressed: () {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Row(
-                children: [
-                  Icon(Icons.check_circle, color: AppConstants.whiteColor),
-                  SizedBox(width: 12),
-                  Text(
-                    'Paramètres sauvegardés avec succès',
-                    style: TextStyle(color: AppConstants.whiteColor),
+              content: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.check_circle, color: AppConstants.whiteColor, size: 20),
+                  SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      'Paramètres sauvegardés avec succès',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: AppConstants.whiteColor),
+                    ),
                   ),
                 ],
               ),
@@ -1359,8 +1838,20 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
+              duration: const Duration(milliseconds: 1200),
             ),
           );
+          // Rediriger vers le menu après un court délai pour laisser la Snackbar s'afficher
+          Future.delayed(const Duration(milliseconds: 1200), () {
+            if (!mounted) return;
+            // Ouvrir la fenêtre modale du menu principal
+            showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              backgroundColor: Colors.transparent,
+              builder: (_) => const MenuModal(),
+            );
+          });
         },
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.transparent,
@@ -1372,15 +1863,20 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
         child: const Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.save, color: AppConstants.whiteColor, size: 24),
-            SizedBox(width: 12),
-            Text(
-              'Sauvegarder les Paramètres',
-              style: TextStyle(
-                color: AppConstants.whiteColor,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.5,
+            Icon(Icons.save, color: AppConstants.whiteColor, size: 22),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Sauvegarder les Paramètres',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppConstants.whiteColor,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                ),
               ),
             ),
           ],
@@ -1420,67 +1916,69 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
 
 
 
-  void _showPrivacyPolicy() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Politique de Confidentialité'),
-        content: const SingleChildScrollView(
-          child: Text(
-            'Guinemali s\'engage à protéger votre vie privée. Vos données sont chiffrées et stockées de manière sécurisée. Nous ne partageons jamais vos informations personnelles avec des tiers sans votre consentement explicite.',
+  void _showPrivacyPolicy() async {
+    final lang = _userLanguage;
+    final Map<String, String> urls = {
+      'fr': 'https://guinemali.org/politique-confidentialite',
+      'sus': 'https://guinemali.org/confidentialite-sus',
+      'ff': 'https://guinemali.org/confidentialite-ff',
+      'mlq': 'https://guinemali.org/confidentialite-mlq',
+    };
+    final url = urls[lang] ?? urls['fr']!;
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      // Fallback: afficher un résumé
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Politique de Confidentialité'),
+          content: const SingleChildScrollView(
+            child: Text(
+              'Guinemali s\'engage à protéger votre vie privée. Vos données sont chiffrées et stockées de manière sécurisée. Nous ne partageons jamais vos informations personnelles avec des tiers sans votre consentement explicite.',
+            ),
           ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Fermer')),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Fermer'),
-          ),
-        ],
-      ),
-    );
+      );
+    }
   }
 
   void _showRightToForgetDialog() {
+    final reasonCtrl = TextEditingController();
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Droit à l\'Oubli'),
-        content: const SingleChildScrollView(
+        content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                'Conformément au RGPD, vous avez le droit de demander la suppression de vos données personnelles.',
-                style: TextStyle(fontSize: 16),
+              const Text('Conformément au RGPD, vous pouvez demander la suppression de vos données personnelles.', style: TextStyle(fontSize: 16)),
+              const SizedBox(height: 12),
+              TextField(
+                controller: reasonCtrl,
+                maxLines: 2,
+                decoration: const InputDecoration(hintText: 'Raison (facultatif)', border: OutlineInputBorder(), filled: true),
               ),
-              SizedBox(height: 16),
-              Text(
-                'Cette demande entraînera :',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 8),
-              Text('• Suppression de votre compte'),
-              Text('• Suppression de toutes vos données personnelles'),
-              Text('• Suppression de l\'historique des alertes'),
-              Text('• Suppression des preuves enregistrées'),
-              SizedBox(height: 16),
-              Text(
-                'Cette action est irréversible et prendra effet dans les 30 jours.',
-                style: TextStyle(fontStyle: FontStyle.italic),
-              ),
+              const SizedBox(height: 12),
+              const Text('Cette action est irréversible et prendra effet dans les 30 jours.', style: TextStyle(fontStyle: FontStyle.italic)),
             ],
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Annuler'),
-          ),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Annuler')),
           ElevatedButton(
             onPressed: () {
               Navigator.of(ctx).pop();
-              _requestRightToForget();
+              final reason = reasonCtrl.text.trim();
+              _requestRightToForget(reason.isEmpty ? null : reason);
+              A11yService.announceIfEnabled(context, 'Demande de suppression envoyée');
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
             child: const Text('Demander la Suppression', style: TextStyle(color: Colors.white)),
@@ -1490,10 +1988,14 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
     );
   }
 
-  Future<void> _requestRightToForget() async {
+  Future<void> _requestRightToForget(String? reason) async {
     try {
       // Simuler l'envoi de la demande
       await Future.delayed(const Duration(seconds: 1));
+      // Conserver localement la raison optionnelle pour suivi/support
+      if (reason != null && reason.isNotEmpty) {
+        await StorageService.instance.saveString('right_to_forget_reason', reason);
+      }
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

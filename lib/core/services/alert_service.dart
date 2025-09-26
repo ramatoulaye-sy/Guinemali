@@ -63,36 +63,54 @@ class AlertService {
         'timestamp': DateTime.now().toUtc().toIso8601String(),
       };
       // Stockage local et file de sync non bloquants pour l'UI
+      print('🔍 AVANT _saveAlertLocally');
       await _saveAlertLocally(alertData);
+      print('🔍 APRÈS _saveAlertLocally');
+      print('🔍 AVANT addToSyncQueue');
       await SyncService.instance.addToSyncQueue('alerte', alertData);
+      print('🔍 APRÈS addToSyncQueue');
       try { await StorageService.instance.saveString(AppConstants.keyCurrentAlertId, alertId); } catch (_) {}
+      print('🔍 APRÈS saveString keyCurrentAlertId');
 
-      // Lancer en arrière-plan les opérations réseau (non bloquantes)
-      if (!userId.startsWith('offline_')) {
-        Future(() async {
-          try {
-            final result = await SupabaseService.instance.rpc(
-              'creer_alerte_avec_notifications',
-              params: {
-                'p_utilisateur_id': userId,
-                'p_latitude': latitude,
-                'p_longitude': longitude,
-                'p_type_alerte': type,
-                'p_niveau_danger': dangerLevel,
-                'p_description': description,
-              },
-            ).timeout(AppConstants.timeoutShort);
-            if (result != null) {
-              if (AppConstants.enableLogging) {
-                print('✅ Alerte créée via RPC: ${result.toString()}');
-              }
-            }
-          } catch (e) {
-            if (AppConstants.enableLogging) {
-              print('⚠️ RPC en arrière-plan échouée: $e');
-            }
+      // Forcer la synchronisation immédiate (bloquante)
+      print('🔍 UserId: $userId');
+      print('🔍 Début de la synchronisation forcée...');
+      print('🔍 Avant la condition if(true)');
+      // Forcer la synchronisation même en mode offline pour les alertes d'urgence
+      if (true) { // Toujours synchroniser les alertes d'urgence
+        print('🔍 Condition if(true) validée, début de la synchronisation...');
+        print('🔍 Début du try-catch RPC...');
+        try {
+          print('🚀 Tentative de création d\'alerte via RPC...');
+          final result = await SupabaseService.instance.rpc(
+            'creer_alerte_avec_notifications',
+            params: {
+              'p_utilisateur_id': userId,
+              'p_latitude': latitude,
+              'p_longitude': longitude,
+              'p_type_alerte': type,
+              'p_niveau_danger': dangerLevel,
+              'p_description': description,
+            },
+          ).timeout(AppConstants.timeoutShort);
+          if (result != null) {
+            print('✅ Alerte créée via RPC: ${result.toString()}');
+          } else {
+            print('⚠️ RPC retourné null, tentative d\'insertion directe...');
+            // Fallback: insertion directe dans la table alertes
+            await SupabaseService.instance.insert('alertes', alertData);
+            print('✅ Alerte insérée directement dans la table alertes');
           }
-        });
+        } catch (e) {
+          print('❌ RPC échouée: $e');
+          try {
+            print('🔄 Tentative d\'insertion directe en fallback...');
+            await SupabaseService.instance.insert('alertes', alertData);
+            print('✅ Alerte insérée en fallback');
+          } catch (e2) {
+            print('❌ Fallback échoué: $e2');
+          }
+        }
       }
 
       // Notifications en arrière-plan
@@ -597,31 +615,63 @@ class AlertService {
   /// Récupère l'alerte actuelle
   Future<Map<String, dynamic>?> getCurrentAlert() async {
     try {
+      print('🔍 Recherche de l\'alerte actuelle...');
+      
       final alertId = StorageService.instance.getString(AppConstants.keyCurrentAlertId);
-      if (alertId == null) return null;
+      print('🔍 ID alerte stocké: $alertId');
+      
+      if (alertId == null || alertId.isEmpty) {
+        print('❌ Aucune alerte active trouvée');
+        return null;
+      }
 
-      // Try server first
+      // Essayer d'abord le cache local (plus rapide)
       try {
+        print('🔍 Recherche dans le cache local...');
+        final localAlerts = await StorageService.instance.getLocalAlerts();
+        for (final a in localAlerts) {
+          if (a['id'] == alertId) {
+            print('✅ Alerte trouvée dans le cache local: $alertId');
+            return a;
+          }
+        }
+        print('⚠️ Alerte non trouvée dans le cache local');
+      } catch (e) {
+        print('❌ Erreur cache local: $e');
+      }
+
+      // Fallback: essayer le serveur
+      try {
+        print('🔍 Recherche sur le serveur...');
         final response = await SupabaseService.instance.select(
           'alertes',
           filters: {'id': alertId},
           limit: 1,
         );
         if (response.isNotEmpty) {
+          print('✅ Alerte trouvée sur le serveur: $alertId');
           return Map<String, dynamic>.from(response.first);
         }
-      } catch (_) {}
+        print('⚠️ Alerte non trouvée sur le serveur');
+      } catch (e) {
+        print('❌ Erreur serveur: $e');
+      }
 
-      // Fallback to local cache (offline or not yet synced)
+      // Dernière tentative: chercher dans toutes les alertes locales
       try {
-        final localAlerts = await StorageService.instance.getLocalAlerts();
-        for (final a in localAlerts) {
-          if (a['id'] == alertId) {
+        print('🔍 Recherche dans toutes les alertes locales...');
+        final allLocalAlerts = await StorageService.instance.getLocalAlerts();
+        for (final a in allLocalAlerts) {
+          if (a['id'] == alertId || a['statut'] == 'active') {
+            print('✅ Alerte active trouvée: ${a['id']}');
             return a;
           }
         }
-      } catch (_) {}
+      } catch (e) {
+        print('❌ Erreur recherche étendue: $e');
+      }
 
+      print('❌ Aucune alerte active trouvée');
       return null;
     } catch (e) {
       print('❌ Erreur lors de la récupération de l\'alerte actuelle: $e');

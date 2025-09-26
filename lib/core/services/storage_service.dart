@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
@@ -13,6 +14,24 @@ class StorageService {
 
   Database? _database;
   SharedPreferences? _prefs;
+
+  /// Notifie l'UI quand un réglage global change (ex: taille de texte)
+  final ValueNotifier<int> uiSettingsVersion = ValueNotifier<int>(0);
+
+  // Uniquement pour les clés qui impactent l'UI globale
+  static const Set<String> _uiAffectingKeys = {
+    'text_size',
+    'a11y_reduce_motion',
+    'a11y_readable_font',
+    'a11y_high_contrast',
+    'selected_language',
+  };
+
+  void _maybeBumpUiOnKey(String key) {
+    if (_uiAffectingKeys.contains(key)) {
+      uiSettingsVersion.value = uiSettingsVersion.value + 1;
+    }
+  }
 
   /// Initialise le service de stockage
   Future<void> initialize() async {
@@ -174,6 +193,7 @@ class StorageService {
     if (AppConstants.enableLogging) {
       print('💾 Sauvegarde: $key = "$value"');
     }
+    _maybeBumpUiOnKey(key);
   }
 
   /// Récupère une chaîne de caractères
@@ -194,6 +214,7 @@ class StorageService {
   /// Sauvegarde un booléen
   Future<void> setBool(String key, bool value) async {
     await _prefs?.setBool(key, value);
+    _maybeBumpUiOnKey(key);
   }
 
   /// Récupère un booléen
@@ -208,11 +229,37 @@ class StorageService {
   /// Sauvegarde un entier
   Future<void> setInt(String key, int value) async {
     await _prefs?.setInt(key, value);
+    _maybeBumpUiOnKey(key);
   }
 
-  /// Récupère un entier
+  /// Récupère un entier avec compatibilité (migration String -> int)
   int getInt(String key, {int defaultValue = 0}) {
-    return _prefs?.getInt(key) ?? defaultValue;
+    try {
+      final intVal = _prefs?.getInt(key);
+      if (intVal != null) return intVal;
+
+      // Compatibilité: certaines versions ont enregistré des entiers en String
+      final strVal = _prefs?.getString(key);
+      if (strVal == null) return defaultValue;
+      final parsed = int.tryParse(strVal);
+      if (parsed == null) return defaultValue;
+      // Migrer vers un int pour éviter les erreurs futures
+      _prefs?.remove(key);
+      _prefs?.setInt(key, parsed);
+      return parsed;
+    } catch (_) {
+      // Dernier recours: tenter une lecture String -> int
+      final strVal = _prefs?.getString(key);
+      if (strVal != null) {
+        final parsed = int.tryParse(strVal);
+        if (parsed != null) {
+          _prefs?.remove(key);
+          _prefs?.setInt(key, parsed);
+          return parsed;
+        }
+      }
+      return defaultValue;
+    }
   }
 
   /// Sauvegarde un objet JSON

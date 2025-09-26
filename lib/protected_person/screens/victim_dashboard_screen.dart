@@ -1016,25 +1016,8 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
     final confirmed = await _showEmergencyConfirmation();
     if (!confirmed) return;
 
-    // Navigation immédiate et unique vers l'écran d'alerte active
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      try {
-        context.goNamed('victim_active_alert');
-      } catch (_) {
-        try { context.go(AppConstants.routeVictimActiveAlert); } catch (_) {}
-      }
-      // Sécurité: relancer une fois après un bref délai pour neutraliser une transition concurrente
-      Future.delayed(const Duration(milliseconds: 200), () {
-        try {
-          context.goNamed('victim_active_alert');
-        } catch (_) {
-          try { context.go(AppConstants.routeVictimActiveAlert); } catch (_) {}
-        }
-      });
-    });
-
     try {
-      // Rafraîchir l'utilisateur et vérifier la session
+      // 2. Rafraîchir l'utilisateur et vérifier la session
       try {
         await context.read<AuthProvider>().refreshUser();
       } catch (_) {}
@@ -1051,12 +1034,11 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
         return;
       }
 
-      // 2. (optionnel) message de chargement retiré pour éviter conflit UI pendant navigation
-
       // 3. Obtenir la position actuelle
       final position = await GeolocationService.instance.getCurrentPosition();
       
-      // 4. Créer l'alerte d'urgence via Supabase
+      // 4. Créer l'alerte d'urgence via Supabase D'ABORD
+      print('🚨 Création de l\'alerte d\'urgence...');
       final alertId = await AlertService.instance.createEmergencyAlert(
         latitude: position.latitude,
         longitude: position.longitude,
@@ -1064,32 +1046,75 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
         dangerLevel: 5,
         description: 'Alerte SOS déclenchée depuis le dashboard',
       );
-
-      // 5. Démarrer l'enregistrement automatique discret
-      await _startDiscreteRecording(alertId);
-
-      // 6. Envoyer l'alerte à la communauté locale
-      await _sendCommunityAlert(position.latitude, position.longitude, alertId);
-
-      // 7. Notifier les contacts d'urgence
-      await _notifyEmergencyContactsLocal(alertId, position);
-
-      // 8. Démarrer le suivi GPS continu
-      await _startContinuousGPSTracking(alertId, position);
-
-      // 9. Afficher le message de succès avec option d'annulation
-      if (mounted) {
-        _showEmergencySuccessWithCancel(alertId);
-        // Notification locale persistante
-        LocalPushService.instance.showPersistent(
-          id: 1001,
-          title: 'Alerte active',
-          body: 'Votre alerte est en cours. Appuyez pour revenir à l\'app.',
-        );
-        // Navigation déjà effectuée
-      }
       
-      print('🚨 URGENCE DÉCLENCHÉE ! Alerte créée: $alertId');
+      print('✅ Alerte créée avec succès: $alertId');
+
+      // 5. Attendre que l'alerte soit complètement sauvegardée
+      await Future.delayed(const Duration(milliseconds: 200));
+      
+      // 6. Vérifier que l'alerte est bien sauvegardée avant navigation
+      final savedAlertId = StorageService.instance.getString(AppConstants.keyCurrentAlertId);
+      if (savedAlertId != alertId) {
+        print('⚠️ Alerte non sauvegardée correctement, nouvelle tentative...');
+        await StorageService.instance.saveString(AppConstants.keyCurrentAlertId, alertId);
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+
+      // 7. Navigation UNIQUE et SÉCURISÉE vers l'écran d'alerte active
+      if (mounted) {
+        print('🧭 Navigation vers l\'écran d\'alerte active...');
+        print('🧭 Contexte monté: $mounted');
+        print('🧭 Tentative goNamed...');
+        try {
+          context.goNamed('victim_active_alert');
+          print('✅ goNamed réussi');
+        } catch (e) {
+          print('❌ Erreur navigation goNamed: $e');
+          print('🧭 Tentative go avec route...');
+          try { 
+            context.go(AppConstants.routeVictimActiveAlert); 
+            print('✅ go avec route réussi');
+          } catch (e2) {
+            print('❌ Erreur navigation go: $e2');
+            throw Exception('Impossible de naviguer vers l\'écran d\'alerte');
+          }
+        }
+      } else {
+        print('❌ Contexte non monté, navigation impossible');
+      }
+
+      // 8. Continuer les opérations en arrière-plan (non bloquantes)
+      Future(() async {
+        try {
+          // Démarrer l'enregistrement automatique discret
+          await _startDiscreteRecording(alertId);
+
+          // Envoyer l'alerte à la communauté locale
+          await _sendCommunityAlert(position.latitude, position.longitude, alertId);
+
+          // Notifier les contacts d'urgence
+          await _notifyEmergencyContactsLocal(alertId, position);
+
+          // Démarrer le suivi GPS continu
+          await _startContinuousGPSTracking(alertId, position);
+
+          // Afficher le message de succès avec option d'annulation
+          if (mounted) {
+            _showEmergencySuccessWithCancel(alertId);
+            // Notification locale persistante
+            LocalPushService.instance.showPersistent(
+              id: 1001,
+              title: 'Alerte active',
+              body: 'Votre alerte est en cours. Appuyez pour revenir à l\'app.',
+            );
+          }
+          
+          print('🚨 URGENCE DÉCLENCHÉE ! Alerte créée: $alertId');
+        } catch (e) {
+          print('❌ Erreur lors des opérations en arrière-plan: $e');
+        }
+      });
+      
     } catch (e) {
       print('❌ Erreur lors du déclenchement de l\'urgence: $e');
       if (mounted) {

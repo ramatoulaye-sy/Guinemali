@@ -77,8 +77,10 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
   /// Charge l'alerte locale actuelle
   Future<void> _loadCurrentAlert() async {
     try {
+      print('🔍 Chargement de l\'alerte actuelle...');
       final alert = await AlertService.instance.getCurrentAlert();
       if (alert != null) {
+        print('✅ Alerte chargée: ${alert['id']}');
         setState(() {
           _currentAlert = alert;
           _alertId = alert['id'] as String;
@@ -86,9 +88,49 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
         
         // Charger les preuves associées
         await _loadEvidences();
+      } else {
+        print('❌ Aucune alerte active trouvée');
+        // Attendre un peu et réessayer
+        await Future.delayed(const Duration(milliseconds: 500));
+        final retryAlert = await AlertService.instance.getCurrentAlert();
+        if (retryAlert != null) {
+          print('✅ Alerte trouvée au deuxième essai: ${retryAlert['id']}');
+          setState(() {
+            _currentAlert = retryAlert;
+            _alertId = retryAlert['id'] as String;
+          });
+          await _loadEvidences();
+        } else {
+          print('❌ Aucune alerte trouvée après retry');
+          // Afficher un message d'erreur à l'utilisateur
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('⚠️ Aucune alerte active trouvée. Retour au dashboard...'),
+                backgroundColor: Colors.orange,
+                duration: Duration(seconds: 3),
+              ),
+            );
+            // Retourner au dashboard après un délai
+            Future.delayed(const Duration(seconds: 3), () {
+              if (mounted) {
+                Navigator.of(context).pushReplacementNamed('/victim/dashboard');
+              }
+            });
+          }
+        }
       }
     } catch (e) {
       print('❌ Erreur lors du chargement de l\'alerte: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors du chargement de l\'alerte: $e'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 

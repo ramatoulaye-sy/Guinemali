@@ -3,7 +3,6 @@ import '../../core/constants/app_constants.dart';
 import 'victim_home_screen.dart';
 import 'victim_ong_screen.dart';
 import 'victim_contacts_screen.dart';
-import 'victim_menu_screen.dart';
 
 /// Écran principal avec navigation bottom pour les victimes
 class VictimMainScreen extends StatefulWidget {
@@ -27,7 +26,7 @@ class _VictimMainScreenState extends State<VictimMainScreen> {
       const VictimHomeScreen(),
       const VictimOngScreen(),
       const VictimContactsScreen(),
-      const VictimMenuScreen(),
+      // menu screen supprimé; le menu est une modale à ouvrir depuis le dashboard
     ];
   }
 

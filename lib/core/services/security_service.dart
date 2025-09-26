@@ -50,7 +50,25 @@ class SecurityService {
 
   Future<bool> authenticateWithBiometrics({String reason = 'Déverrouiller Guinèmali'}) async {
     try {
-      return await _localAuth.authenticate(
+      print('🔐 Tentative d\'authentification biométrique: $reason');
+      
+      // Vérifier d'abord si la biométrie est disponible
+      final canCheck = await _localAuth.canCheckBiometrics;
+      final isDeviceSupported = await _localAuth.isDeviceSupported();
+      
+      print('🔐 canCheckBiometrics: $canCheck');
+      print('🔐 isDeviceSupported: $isDeviceSupported');
+      
+      if (!canCheck && !isDeviceSupported) {
+        print('❌ Biométrie non disponible');
+        return false;
+      }
+
+      // Obtenir les types de biométrie disponibles
+      final availableBiometrics = await _localAuth.getAvailableBiometrics();
+      print('🔐 Types de biométrie disponibles: $availableBiometrics');
+
+      final result = await _localAuth.authenticate(
         localizedReason: reason,
         options: const AuthenticationOptions(
           biometricOnly: true,
@@ -58,7 +76,19 @@ class SecurityService {
           useErrorDialogs: true,
         ),
       );
-    } catch (_) {
+      
+      print('🔐 Résultat authentification: $result');
+      return result;
+    } on PlatformException catch (e) {
+      if (e.code == 'no_fragment_activity') {
+        print('❌ Erreur FragmentActivity: L\'activité doit être une FragmentActivity pour utiliser la biométrie');
+        print('💡 Solution: Modifier MainActivity.kt pour étendre FragmentActivity');
+        return false;
+      }
+      print('❌ Erreur authentification biométrique: $e');
+      return false;
+    } catch (e) {
+      print('❌ Erreur authentification biométrique: $e');
       return false;
     }
   }

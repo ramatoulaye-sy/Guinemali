@@ -28,6 +28,7 @@ class AppConstants {
   static const String routeVictimEmergencyPlan = '/victim/emergency-plan';
   static const String routeVictimHistory = '/victim/history';
   static const String routeVictimSettings = '/victim/settings';
+  // routeVictimMenu retirée (on conserve la fenêtre modale Menu)
   static const String routeVictimHelp = '/victim/help';
   static const String routeVictimProfile = '/victim/profile';
   static const String routeVictimForum = '/victim/forum';

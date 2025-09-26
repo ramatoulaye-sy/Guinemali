@@ -47,6 +47,9 @@ class SyncService {
       // Charger la configuration utilisateur
       await _loadConfig();
 
+      // Recharger la file persistée depuis le stockage local
+      await _loadPersistedQueue();
+
       // Démarrer la synchronisation périodique
       _startPeriodicSync();
       
@@ -58,6 +61,25 @@ class SyncService {
       print('✅ Service de synchronisation initialisé');
     } catch (e) {
       print('❌ Erreur lors de l\'initialisation du service de sync: $e');
+    }
+  }
+
+  /// Charger en mémoire la file d'attente persistée (au démarrage ou avant un force sync)
+  Future<void> _loadPersistedQueue() async {
+    try {
+      final persisted = await StorageService.instance.getSyncQueueItems();
+      if (persisted.isNotEmpty) {
+        // Éviter les doublons basés sur l'id
+        final existingIds = _syncQueue.map((e) => e['id'] as String).toSet();
+        for (final item in persisted) {
+          if (!existingIds.contains(item['id'])) {
+            _syncQueue.add(item);
+          }
+        }
+        print('📦 File de sync rechargée: ${persisted.length} éléments');
+      }
+    } catch (e) {
+      print('❌ Erreur lors du rechargement de la file de sync: $e');
     }
   }
 
@@ -248,9 +270,11 @@ class SyncService {
 
       final bytes = await file.readAsBytes();
       final fileName = file.uri.pathSegments.last;
+      // Préfixer par l'utilisateur pour RLS côté Storage
+      final userId = StorageService.instance.getString('user_id') ?? 'unknown_user';
       final type = (evidenceData['type'] as String?) ?? 'autre';
       final bucket = type == 'audio' ? 'audio_evidence' : type == 'video' ? 'video_evidence' : type == 'photo' ? 'photo_evidence' : 'files_evidence';
-      final storagePath = '${evidenceData['alert_id']}/$fileName';
+      final storagePath = '$userId/${evidenceData['alert_id']}/$fileName';
       final uploadedPath = await SupabaseService.instance.uploadFile(
         bucket: bucket,
         path: storagePath,
@@ -258,9 +282,8 @@ class SyncService {
         metadata: {'content-type': type == 'audio' ? 'audio/mp4' : type == 'video' ? 'video/mp4' : type == 'photo' ? 'image/jpeg' : 'application/octet-stream'},
       );
 
-      // Insérer l’enregistrement en base
+      // Insérer l’enregistrement en base (laisser Postgres générer l'id UUID)
       final row = {
-        'id': evidenceData['id'],
         'alerte_id': evidenceData['alert_id'],
         'type': type,
         'chemin_fichier': uploadedPath,
@@ -272,6 +295,7 @@ class SyncService {
       // Marquer comme synchronisé côté local
       await StorageService.instance.markEvidenceSynced(evidenceData['id']);
       print('✅ Preuve synchronisée: ${evidenceData['id']}');
+      // Optionnel: si un BuildContext global est disponible, annoncer le succès
     } catch (e) {
       throw Exception('Échec sync preuve: $e');
     }
@@ -377,6 +401,8 @@ class SyncService {
     }
     
     print('🚀 Synchronisation forcée lancée');
+    // S'assurer que les éléments persistés sont en mémoire
+    await _loadPersistedQueue();
     await _performSync();
   }
 
