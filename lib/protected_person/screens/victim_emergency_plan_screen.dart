@@ -5,8 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:guinemali/core/services/storage_service.dart';
 import 'package:guinemali/core/services/emergency_contact_service.dart';
 import 'package:guinemali/core/services/geolocation_service.dart';
-import 'package:guinemali/core/services/local_alert_service.dart';
-import 'package:guinemali/core/services/local_notification_service.dart';
+// Imports supprimés car le bouton SOS principal est uniquement sur le dashboard
 import 'package:guinemali/core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
 
@@ -36,102 +35,47 @@ class _VictimEmergencyPlanScreenState extends State<VictimEmergencyPlanScreen> {
   }
 
   // === Actions rapides (réutilisent la logique existante du panneau Actions Rapides) ===
-  void _navigateToSOS(BuildContext context) async {
-    HapticFeedback.heavyImpact();
-    
-    // Demander confirmation
-    final confirmed = await _showEmergencyConfirmation();
-    if (!confirmed) return;
-    
-    try {
-      // Obtenir la position actuelle
-      final position = await GeolocationService.instance.getCurrentPosition();
-      
-      // Créer l'alerte d'urgence locale
-      final alertId = await LocalAlertService.instance.createEmergencyAlert(
-        latitude: position.latitude,
-        longitude: position.longitude,
-        type: 'urgence',
-        dangerLevel: 5,
-        description: 'Alerte SOS déclenchée depuis le plan d\'urgence',
-      );
-      
-      // Notifier les contacts d'urgence
-      final customMessage = _smsTemplateController.text.isNotEmpty 
-          ? _smsTemplateController.text 
-          : null;
-      
-      await LocalNotificationService.instance.notifyEmergencyContacts(
-        alertId: alertId,
-        latitude: position.latitude,
-        longitude: position.longitude,
-        customMessage: customMessage,
-      );
-      
-      // Rediriger vers l'écran d'alerte active
-      if (mounted) {
-        context.go(AppConstants.routeVictimActiveAlert);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('🚨 Alerte d\'urgence déclenchée !'),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 3),
+  void _showSOSInfo(BuildContext context) async {
+    // Afficher une information sur le bouton SOS principal
+    if (mounted) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.info_outline, color: Colors.orange[700]),
+              const SizedBox(width: 8),
+              const Text('Bouton SOS Principal'),
+            ],
           ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erreur lors du déclenchement de l\'alerte: $e'),
-            backgroundColor: Colors.red,
+          content: const Text(
+            'Pour déclencher une alerte SOS d\'urgence, utilisez le bouton principal rouge situé sur le dashboard.\n\n'
+            'Ce bouton principal est le seul point d\'entrée pour les alertes d\'urgence et garantit une gestion cohérente.',
           ),
-        );
-      }
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Fermer'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                context.go(AppConstants.routeVictimDashboard);
+              },
+              icon: const Icon(Icons.dashboard),
+              label: const Text('Aller au Dashboard'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange[700],
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      );
     }
   }
 
-  /// Affiche une confirmation pour déclencher l'alerte d'urgence
-  Future<bool> _showEmergencyConfirmation() async {
-    return await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        title: const Text(
-          '🚨 Alerte d\'Urgence',
-          style: TextStyle(
-            color: Colors.red,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: const Text(
-          'Êtes-vous sûr de vouloir déclencher une alerte d\'urgence ?\n\n'
-          'Cela va :\n'
-          '• Envoyer votre position GPS\n'
-          '• Notifier vos contacts d\'urgence\n'
-          '• Démarrer l\'enregistrement automatique',
-          style: TextStyle(color: Colors.black),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text(
-              'Annuler',
-              style: TextStyle(color: Colors.grey),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Déclencher l\'Alerte'),
-          ),
-        ],
-      ),
-    ) ?? false;
-  }
+  // Méthode supprimée car le bouton SOS principal est maintenant uniquement sur le dashboard
 
   Future<void> _startEmergencyCallSequence(BuildContext context) async {
     HapticFeedback.mediumImpact();
@@ -479,10 +423,10 @@ class _VictimEmergencyPlanScreenState extends State<VictimEmergencyPlanScreen> {
             children: [
               Expanded(
                 child: _buildQuickActionButton(
-                  icon: Icons.sos,
-                  label: 'SOS',
-                  color: Colors.red,
-                  onTap: () => _navigateToSOS(context),
+                  icon: Icons.info_outline,
+                  label: 'Info SOS',
+                  color: Colors.orange,
+                  onTap: () => _showSOSInfo(context),
                 ),
               ),
               const SizedBox(width: 16),
@@ -818,7 +762,7 @@ class _VictimEmergencyPlanScreenState extends State<VictimEmergencyPlanScreen> {
             label: _isEditing ? 'Sauvegarder' : 'Actions Rapides',
             icon: _isEditing ? Icons.save : Icons.flash_on,
             color: _isEditing ? Colors.green : AppTheme.primaryColor,
-            onTap: _isEditing ? _saveEmergencyPlan : () => _navigateToSOS(context),
+            onTap: _isEditing ? _saveEmergencyPlan : () => _showSOSInfo(context),
           ),
         ),
       ],

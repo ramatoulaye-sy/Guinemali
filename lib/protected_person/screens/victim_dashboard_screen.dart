@@ -113,14 +113,13 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
       ),
     );
   }
-
+  
   /// Démarre la surveillance des statuts en temps réel
   void _startStatusMonitoring() {
     _statusTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
       _updateServiceStatus();
     });
   }
-
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -194,22 +193,22 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
           children: [
             // Header avec logo, nom utilisateur et icônes de statut
             _buildHeader(user),
-
+            
             // Contenu principal scrollable pour éviter les overflows (clavier/dialogues)
             Expanded(
               child: SingleChildScrollView(
                 padding: EdgeInsets.only(top: 16, bottom: 16 + MediaQuery.of(context).viewInsets.bottom),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Bouton SOS principal
-                    _buildSOSButton(),
-
-                    const SizedBox(height: 32),
-
-                    // Bouton Actions Rapides
-                    _buildQuickActionsButton(),
-                  ],
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Bouton SOS principal
+                  _buildSOSButton(),
+                  
+                  const SizedBox(height: 32),
+                  
+                  // Bouton Actions Rapides
+                  _buildQuickActionsButton(),
+                ],
                 ),
               ),
             ),
@@ -244,7 +243,7 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
       ),
       child: Row(
         children: [
-          // Logo Guinémali à gauche
+          // Logo Guinémali à gauche - POSITION INITIALE
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -288,113 +287,210 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
           
           const SizedBox(width: 16),
           
-          // Prénom utilisateur et slogan au centre
+          // Icône profil + Nom utilisateur et slogan au centre - NOUVEAU LAYOUT
           Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: [
-                Text(
-                  user?.prenom ?? 'Utilisateur',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    letterSpacing: 0.3,
+                // Icône profil DEVANT le nom utilisateur - CLIQUABLE
+                GestureDetector(
+                  onTap: () {
+                    print('👤 Clic sur le bouton profil détecté');
+                    _showProfileOptions(user);
+                  },
+                  child: Container(
+                    width: 40, // Légèrement agrandi pour être plus cliquable
+                    height: 40, // Légèrement agrandi pour être plus cliquable
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.4),
+                        width: 1.5, // Bordure plus visible
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 2,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: ClipOval(
+                      child: Builder(builder: (context) {
+                        final cached = StorageService.instance.getString('profile_photo_url');
+                        final effectiveUrl = (user?.photoUrl != null && user!.photoUrl!.isNotEmpty)
+                            ? user.photoUrl!
+                            : (cached ?? '');
+                        if (effectiveUrl.isNotEmpty) {
+                          return Image.network(
+                            effectiveUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => const Icon(Icons.person_outline, color: Colors.white, size: 20),
+                          );
+                        }
+                        return const Icon(Icons.person_outline, color: Colors.white, size: 20);
+                      }),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  'Votre Sécurité, notre priorité',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.white.withOpacity(0.9),
-                    fontWeight: FontWeight.w400,
-                    fontStyle: FontStyle.italic,
+                
+                const SizedBox(width: 12), // Espacement entre profil et texte
+                
+                // Nom utilisateur et slogan - CENTRÉ DE FAÇON ESTHÉTIQUE
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user?.prenom ?? 'Utilisateur',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Votre Sécurité, notre priorité',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.white.withOpacity(0.9),
+                          fontWeight: FontWeight.w400,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
           
-          const SizedBox(width: 16),
-          
-          // Icônes de statut à droite
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Icône profil → photo URL (avec cache local immédiat)
-              GestureDetector(
-                onTap: () => _showProfileOptions(user),
-                child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.4),
-                      width: 1,
-                    ),
-                  ),
-                  child: ClipOval(
-                    child: Builder(builder: (context) {
-                      final cached = StorageService.instance.getString('profile_photo_url');
-                      final effectiveUrl = (user?.photoUrl != null && user!.photoUrl!.isNotEmpty)
-                          ? user.photoUrl!
-                          : (cached ?? '');
-                      if (effectiveUrl.isNotEmpty) {
-                        return Image.network(
-                          effectiveUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => const Icon(Icons.person_outline, color: Colors.white, size: 18),
-                        );
-                      }
-                      return const Icon(Icons.person_outline, color: Colors.white, size: 18);
-                    }),
-                  ),
+          // Icônes de statut À DROITE - ÉLÉGANTES ET CLIQUABLES
+          InkWell(
+            onTap: () {
+              print('🎯 Clic détecté sur WiFi');
+              _showNetworkStatus();
+            },
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              width: 28, // Plus petit et élégant
+              height: 28, // Plus petit et élégant
+              margin: const EdgeInsets.all(6), // Zone de clic étendue
+              decoration: BoxDecoration(
+                color: _isOnline 
+                    ? Colors.white.withOpacity(0.15)
+                    : Colors.white.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(20), // Plus arrondi
+                border: Border.all(
+                  color: _isOnline 
+                      ? Colors.white.withOpacity(0.3)
+                      : Colors.white.withOpacity(0.15),
+                  width: 0.8, // Plus fin
                 ),
+                boxShadow: _isOnline ? [
+                  BoxShadow(
+                    color: Colors.blue.withOpacity(0.2),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  ),
+                ] : null,
               ),
-              
-              const SizedBox(height: 6),
-              
-              // Icônes de statut en ligne horizontale
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildStatusIcon(
-                    icon: Icons.wifi,
-                    isActive: _isOnline,
-                    label: '',
-                    color: Colors.blue,
-                    onTap: () => _showNetworkStatus(),
-                  ),
-                  const SizedBox(width: 8),
-                  _buildStatusIcon(
-                    icon: Icons.gps_fixed,
-                    isActive: _isGpsActive,
-                    label: '',
-                    color: Colors.green,
-                    onTap: () => _showGpsStatus(),
-                  ),
-                  const SizedBox(width: 8),
-                  _buildStatusIcon(
-                    icon: Icons.mic,
-                    isActive: _isMicrophoneActive,
-                    label: '',
-                    color: Colors.orange,
-                    onTap: () => _showMicrophoneStatus(),
-                  ),
-                ],
+              child: Icon(
+                Icons.wifi,
+                size: 14, // Plus petit et discret
+                color: _isOnline 
+                    ? Colors.blue
+                    : Colors.white.withOpacity(0.6),
               ),
-            ],
+            ),
+          ),
+          
+          InkWell(
+            onTap: () {
+              print('🎯 Clic détecté sur GPS');
+              _showGpsStatus();
+            },
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              width: 28, // Plus petit et élégant
+              height: 28, // Plus petit et élégant
+              margin: const EdgeInsets.all(6), // Zone de clic étendue
+              decoration: BoxDecoration(
+                color: _isGpsActive 
+                    ? Colors.white.withOpacity(0.15)
+                    : Colors.white.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(20), // Plus arrondi
+                border: Border.all(
+                  color: _isGpsActive 
+                      ? Colors.white.withOpacity(0.3)
+                      : Colors.white.withOpacity(0.15),
+                  width: 0.8, // Plus fin
+                ),
+                boxShadow: _isGpsActive ? [
+                  BoxShadow(
+                    color: Colors.green.withOpacity(0.2),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  ),
+                ] : null,
+              ),
+              child: Icon(
+                Icons.gps_fixed,
+                size: 14, // Plus petit et discret
+                color: _isGpsActive 
+                    ? Colors.green
+                    : Colors.white.withOpacity(0.6),
+              ),
+            ),
+          ),
+          
+          InkWell(
+            onTap: () {
+              print('🎯 Clic détecté sur Micro');
+              _showMicrophoneStatus();
+            },
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              width: 28, // Plus petit et élégant
+              height: 28, // Plus petit et élégant
+              margin: const EdgeInsets.all(6), // Zone de clic étendue
+              decoration: BoxDecoration(
+                color: _isMicrophoneActive 
+                    ? Colors.white.withOpacity(0.15)
+                    : Colors.white.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(20), // Plus arrondi
+                border: Border.all(
+                  color: _isMicrophoneActive 
+                      ? Colors.white.withOpacity(0.3)
+                      : Colors.white.withOpacity(0.15),
+                  width: 0.8, // Plus fin
+                ),
+                boxShadow: _isMicrophoneActive ? [
+                  BoxShadow(
+                    color: Colors.orange.withOpacity(0.2),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  ),
+                ] : null,
+              ),
+              child: Icon(
+                Icons.mic,
+                size: 14, // Plus petit et discret
+                color: _isMicrophoneActive 
+                    ? Colors.orange
+                    : Colors.white.withOpacity(0.6),
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  /// Construit une icône de statut
+  /// Construit une icône de statut (version normale)
   Widget _buildStatusIcon({
     required IconData icon,
     required bool isActive,
@@ -404,49 +500,75 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
   }) {
     return GestureDetector(
       onTap: onTap,
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: isActive 
-                  ? Colors.white.withValues(alpha: 0.2)
-                  : Colors.white.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: isActive 
-                    ? Colors.white.withValues(alpha: 0.4)
-                    : Colors.white.withValues(alpha: 0.2),
-                width: 1,
-              ),
-              // Ajouter un effet de survol subtil
-              boxShadow: onTap != null ? [
-                BoxShadow(
-                  color: Colors.white.withValues(alpha: 0.1),
-                  blurRadius: 4,
-                  spreadRadius: 0,
-                ),
-              ] : null,
-            ),
-            child: Icon(
-              icon,
-              size: 16,
-              color: isActive 
-                  ? color  // L'icône prend la couleur naturelle quand active
-                  : Colors.white.withValues(alpha: 0.6), // Blanc transparent quand inactive
-            ),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: isActive 
+              ? Colors.white.withOpacity(0.25)
+              : Colors.white.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isActive 
+                ? Colors.white.withOpacity(0.5)
+                : Colors.white.withOpacity(0.3),
+            width: 1.2,
           ),
-          const SizedBox(height: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              color: Colors.white.withValues(alpha: 0.9),
-              fontWeight: FontWeight.w500,
-              letterSpacing: 0.3,
+          boxShadow: onTap != null ? [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 3,
+              offset: const Offset(0, 1),
             ),
+          ] : null,
+        ),
+        child: Icon(
+          icon,
+          size: 18,
+          color: isActive 
+              ? color
+              : Colors.white.withOpacity(0.7),
+        ),
+      ),
+    );
+  }
+
+  /// Construit une petite icône de statut pour le header (en haut à droite)
+  Widget _buildSmallStatusIcon({
+    required IconData icon,
+    required bool isActive,
+    required Color color,
+    VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: () {
+        print('🎯 Clic détecté sur icône: $icon');
+        if (onTap != null) {
+          onTap();
+        }
+      },
+      child: Container(
+        width: 32, // Agrandi pour être cliquable
+        height: 32, // Agrandi pour être cliquable
+        padding: const EdgeInsets.all(4), // Padding pour zone de clic plus grande
+        decoration: BoxDecoration(
+          color: isActive 
+              ? Colors.white.withOpacity(0.2)
+              : Colors.white.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8), // Plus arrondi
+          border: Border.all(
+            color: isActive 
+                ? Colors.white.withOpacity(0.4)
+                : Colors.white.withOpacity(0.2),
+            width: 1, // Légèrement plus épais
           ),
-        ],
+        ),
+        child: Icon(
+          icon,
+          size: 16, // Légèrement plus grand pour être visible
+          color: isActive 
+              ? color
+              : Colors.white.withOpacity(0.7),
+        ),
       ),
     );
   }
@@ -761,18 +883,18 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
                 padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
                 child: SingleChildScrollView(
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
+          mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
+                    children: [
                           CircleAvatar(
                             radius: 12,
                             backgroundColor: const Color(0xFF945acb),
                             backgroundImage: (user?.photoUrl != null && (user!.photoUrl!.isNotEmpty)) ? NetworkImage(user.photoUrl!) : null,
                             child: (user?.photoUrl == null || user!.photoUrl!.isEmpty) ? const Icon(Icons.person, color: Colors.white, size: 16) : null,
-                          ),
-                          const SizedBox(width: 8),
+                      ),
+                      const SizedBox(width: 8),
                           const Text('Profil Utilisateur', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 18, shadows: [Shadow(color: Colors.black45, blurRadius: 6)])),
                         ],
                       ),
@@ -912,33 +1034,33 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
                   ),
                   // Bordure subtile avec couleur primaire
                   border: Border.all(
-                    color: AppConstants.primaryColor.withValues(alpha: 0.3),
+                    color: AppConstants.primaryColor.withOpacity(0.3),
                     width: 3,
                   ),
                   // Ombres expertes pour la profondeur et l'urgence
                   boxShadow: [
                     // Ombre interne pour la profondeur
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.2),
+                      color: Colors.black.withOpacity(0.2),
                       blurRadius: 20,
                       spreadRadius: -5,
                       offset: const Offset(0, 8),
                     ),
                     // Lueur rouge pulsante (effet d'urgence)
                     BoxShadow(
-                      color: const Color(0xFFFF6B6B).withValues(alpha: 0.4),
+                      color: const Color(0xFFFF6B6B).withOpacity(0.4),
                       blurRadius: 40 + (20 * _pulseController.value),
                       spreadRadius: 8 + (4 * _pulseController.value),
                     ),
                     // Halo violet subtil (couleur primaire)
                     BoxShadow(
-                      color: AppConstants.primaryColor.withValues(alpha: 0.15),
+                      color: AppConstants.primaryColor.withOpacity(0.15),
                       blurRadius: 80 + (30 * _pulseController.value),
                       spreadRadius: 20 + (10 * _pulseController.value),
                     ),
                     // Lueur blanche externe pour l'éclat
                     BoxShadow(
-                      color: Colors.white.withValues(alpha: 0.1),
+                      color: Colors.white.withOpacity(0.1),
                       blurRadius: 100 + (40 * _pulseController.value),
                       spreadRadius: 30 + (15 * _pulseController.value),
                     ),
@@ -957,8 +1079,8 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
                             child: const Icon(
                               Icons.emergency,
                               size: 80,
-                              color: Colors.white,
-                            ),
+                        color: Colors.white,
+                      ),
                           );
                         },
                       ),
@@ -990,16 +1112,16 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.white.withValues(alpha: 0.8),
+                            color: Colors.white.withOpacity(0.8),
                               blurRadius: 10,
                               spreadRadius: 2,
-                            ),
-                          ],
-                        ),
                       ),
                     ],
                   ),
                 ),
+                    ],
+              ),
+            ),
               ),
             ),
             
@@ -1012,17 +1134,32 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
 
   /// Déclenche l'urgence avec confirmation et fonctionnalités avancées
   Future<void> _triggerEmergency() async {
+    print('🚨🚨🚨 DASHBOARD SOS DÉCLENCHÉ - _triggerEmergency() COMMENCÉ 🚨🚨🚨');
+    print('🚨 DÉBUT _triggerEmergency');
+    
     // 1. Demander confirmation pour éviter les clics accidentels
     final confirmed = await _showEmergencyConfirmation();
-    if (!confirmed) return;
+    if (!confirmed) {
+      print('❌ Confirmation annulée par l\'utilisateur');
+      return;
+    }
+    
+    print('✅ Confirmation validée par l\'utilisateur');
 
     try {
+      print('🔍 Étape 1: Rafraîchissement de l\'utilisateur...');
+      
       // 2. Rafraîchir l'utilisateur et vérifier la session
       try {
         await context.read<AuthProvider>().refreshUser();
-      } catch (_) {}
+        print('✅ Utilisateur rafraîchi');
+      } catch (_) {
+        print('⚠️ Erreur rafraîchissement utilisateur (ignorée)');
+      }
       final currentUser = context.read<AuthProvider>().currentUser;
+      print('🔍 Utilisateur actuel: ${currentUser?.id}');
       if (currentUser == null) {
+        print('❌ Utilisateur non connecté, arrêt de la procédure');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -1033,12 +1170,19 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
         }
         return;
       }
-
-      // 3. Obtenir la position actuelle
-      final position = await GeolocationService.instance.getCurrentPosition();
       
-      // 4. Créer l'alerte d'urgence via Supabase D'ABORD
+      print('✅ Utilisateur connecté: ${currentUser.id}');
+
+      print('🔍 Étape 2: Création de l\'alerte AVANT navigation...');
+      
+      // 3. Créer l'alerte d'urgence D'ABORD (pour que l'écran la trouve)
       print('🚨 Création de l\'alerte d\'urgence...');
+      
+      // Obtenir la position actuelle
+      final position = await GeolocationService.instance.getCurrentPosition();
+      print('✅ Position récupérée: ${position.latitude}, ${position.longitude}');
+      
+      // Créer l'alerte d'urgence
       final alertId = await AlertService.instance.createEmergencyAlert(
         latitude: position.latitude,
         longitude: position.longitude,
@@ -1049,71 +1193,21 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
       
       print('✅ Alerte créée avec succès: $alertId');
 
-      // 5. Attendre que l'alerte soit complètement sauvegardée
-      await Future.delayed(const Duration(milliseconds: 200));
+      print('🔍 Étape 3: Navigation APRÈS création de l\'alerte...');
       
-      // 6. Vérifier que l'alerte est bien sauvegardée avant navigation
-      final savedAlertId = StorageService.instance.getString(AppConstants.keyCurrentAlertId);
-      if (savedAlertId != alertId) {
-        print('⚠️ Alerte non sauvegardée correctement, nouvelle tentative...');
-        await StorageService.instance.saveString(AppConstants.keyCurrentAlertId, alertId);
-        await Future.delayed(const Duration(milliseconds: 100));
+      // 4. Navigation APRÈS la création de l'alerte (pour que l'écran la trouve)
+      print('🧭 Navigation vers l\'écran d\'alerte active...');
+      print('🧭 Contexte monté: $mounted');
+      if (!mounted) {
+        print('❌ Contexte non monté, mais alerte créée avec succès');
+        return;
       }
+      
+      // Navigation avec GoRouter
+      context.go(AppConstants.routeVictimActiveAlert);
+      print('✅ Navigation lancée avec GoRouter');
 
-      // 7. Navigation UNIQUE et SÉCURISÉE vers l'écran d'alerte active
-      if (mounted) {
-        print('🧭 Navigation vers l\'écran d\'alerte active...');
-        print('🧭 Contexte monté: $mounted');
-        print('🧭 Tentative goNamed...');
-        try {
-          context.goNamed('victim_active_alert');
-          print('✅ goNamed réussi');
-        } catch (e) {
-          print('❌ Erreur navigation goNamed: $e');
-          print('🧭 Tentative go avec route...');
-          try { 
-            context.go(AppConstants.routeVictimActiveAlert); 
-            print('✅ go avec route réussi');
-          } catch (e2) {
-            print('❌ Erreur navigation go: $e2');
-            throw Exception('Impossible de naviguer vers l\'écran d\'alerte');
-          }
-        }
-      } else {
-        print('❌ Contexte non monté, navigation impossible');
-      }
-
-      // 8. Continuer les opérations en arrière-plan (non bloquantes)
-      Future(() async {
-        try {
-          // Démarrer l'enregistrement automatique discret
-          await _startDiscreteRecording(alertId);
-
-          // Envoyer l'alerte à la communauté locale
-          await _sendCommunityAlert(position.latitude, position.longitude, alertId);
-
-          // Notifier les contacts d'urgence
-          await _notifyEmergencyContactsLocal(alertId, position);
-
-          // Démarrer le suivi GPS continu
-          await _startContinuousGPSTracking(alertId, position);
-
-          // Afficher le message de succès avec option d'annulation
-          if (mounted) {
-            _showEmergencySuccessWithCancel(alertId);
-            // Notification locale persistante
-            LocalPushService.instance.showPersistent(
-              id: 1001,
-              title: 'Alerte active',
-              body: 'Votre alerte est en cours. Appuyez pour revenir à l\'app.',
-            );
-          }
-          
-          print('🚨 URGENCE DÉCLENCHÉE ! Alerte créée: $alertId');
-        } catch (e) {
-          print('❌ Erreur lors des opérations en arrière-plan: $e');
-        }
-      });
+      print('🎉 FIN _triggerEmergency - Navigation lancée');
       
     } catch (e) {
       print('❌ Erreur lors du déclenchement de l\'urgence: $e');
@@ -1559,10 +1653,10 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
               if (enteredCode == '1234') { // Code secret par défaut
                 Navigator.of(context).pop(true);
               } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
                     content: Text('❌ Code secret incorrect !'),
-                    backgroundColor: Colors.red,
+          backgroundColor: Colors.red,
                   ),
                 );
               }
@@ -1589,7 +1683,7 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
       try {
         await EvidenceService.instance.stopAudioRecording();
         await EvidenceService.instance.stopVideoRecording();
-      } catch (e) {
+    } catch (e) {
         print('⚠️ Erreur lors de l\'arrêt de l\'enregistrement: $e');
       }
 
@@ -1614,29 +1708,23 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
     } catch (e) {
       print('❌ Erreur lors de l\'annulation: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
             content: Text('Erreur lors de l\'annulation: $e'),
-            backgroundColor: Colors.red,
+          backgroundColor: Colors.red,
             duration: Duration(seconds: 4),
-          ),
-        );
+        ),
+      );
       }
     }
   }
 
   /// Construit le bouton Actions Rapides
   Widget _buildQuickActionsButton() {
-    return AnimatedBuilder(
-      animation: _fadeController,
-      builder: (context, child) {
-        return Opacity(
-          opacity: _fadeController.value,
-          child: Transform.translate(
-            offset: Offset(0, 30 * (1 - _fadeController.value)),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
+    // Rendre les boutons toujours visibles (suppression Opacity/Transform)
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
                 ElevatedButton.icon(
                   onPressed: () => _navigateToQuickActions(),
                   icon: const Icon(Icons.flash_on),
@@ -1651,26 +1739,22 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
                     elevation: 4,
                   ),
                 ),
-                const SizedBox(height: 12),
-                ElevatedButton.icon(
-                  onPressed: () => _navigateToRealtimeMap(),
-                  icon: const Icon(Icons.map_outlined),
-                  label: const Text('Carte GPS en temps réel'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFee82ee),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(25),
-                    ),
-                    elevation: 4,
-                  ),
-                ),
-              ],
+        const SizedBox(height: 12),
+        ElevatedButton.icon(
+          onPressed: () => _navigateToRealtimeMap(),
+          icon: const Icon(Icons.map_outlined),
+          label: const Text('Carte GPS en temps réel'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFee82ee),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(25),
             ),
+            elevation: 4,
           ),
-        );
-      },
+        ),
+      ],
     );
   }
 
@@ -1689,32 +1773,32 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
         ],
       ),
       child: SafeArea(
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
             Expanded(
               child: _buildFooterButton(
-                icon: Icons.home,
-                label: 'Accueil',
+            icon: Icons.home,
+            label: 'Accueil',
                 index: 0,
-                onTap: () => _navigateToHome(),
-              ),
+            onTap: () => _navigateToHome(),
+          ),
             ),
             Expanded(
               child: _buildFooterButton(
-                icon: Icons.contacts,
-                label: 'Contact',
+            icon: Icons.contacts,
+            label: 'Contact',
                 index: 1,
-                onTap: () => _navigateToContacts(),
-              ),
+            onTap: () => _navigateToContacts(),
+          ),
             ),
             Expanded(
               child: _buildFooterButton(
-                icon: Icons.forum,
-                label: 'Forum',
+            icon: Icons.forum,
+            label: 'Forum',
                 index: 2,
-                onTap: () => _navigateToForum(),
-              ),
+            onTap: () => _navigateToForum(),
+          ),
             ),
             Expanded(
               child: _buildFooterButton(
@@ -1726,13 +1810,13 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
             ),
             Expanded(
               child: _buildFooterButton(
-                icon: Icons.menu,
-                label: 'Menu',
+            icon: Icons.menu,
+            label: 'Menu',
                 index: 3,
-                onTap: () => _showMenuModal(),
+            onTap: () => _showMenuModal(),
               ),
-            ),
-          ],
+          ),
+        ],
         ),
       ),
     );
@@ -1766,28 +1850,28 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
               : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Column(
+      child: Column(
           mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 24,
+        children: [
+          Icon(
+            icon,
+            size: 24,
               color: isSelected 
                   ? AppTheme.primaryColor 
                   : Colors.grey.shade600,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
                 color: isSelected 
                     ? AppTheme.primaryColor 
                     : Colors.grey.shade600,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-              ),
             ),
-          ],
+          ),
+        ],
         ),
       ),
     );

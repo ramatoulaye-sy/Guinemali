@@ -69,6 +69,35 @@ class ForumPost {
         anonymous: json['anonymous'] as bool? ?? false,
         hideAvatar: json['hideAvatar'] as bool? ?? false,
       );
+
+  /// Crée un ForumPost depuis une ligne Supabase (colonnes snake_case)
+  static ForumPost fromSupabase(Map<String, dynamic> row) {
+    final mediasList = (row['medias'] as List?) ?? [];
+    final medias = mediasList.map((m) {
+      final Map<String, dynamic> mm = (m as Map).cast<String, dynamic>();
+      final kind = (mm['kind'] ?? 'image').toString();
+      final url = (mm['url'] ?? mm['localPath'] ?? '').toString();
+      return ForumMedia(kind: kind, localPath: url);
+    }).toList();
+    
+    final likedBy = {...(((row['liked_by'] as List?) ?? []).cast<String>())};
+    final comments = <ForumComment>[]; // À hydrater si nécessaire
+    
+    return ForumPost(
+      id: row['id'] as String,
+      authorId: row['author_id'] as String,
+      authorName: row['author_name'] as String,
+      category: row['category'] as String,
+      text: row['text'] as String,
+      medias: medias,
+      createdAt: DateTime.parse(row['created_at'].toString()),
+      likedBy: likedBy,
+      comments: comments,
+      moderation: row['moderation'] as String?,
+      anonymous: row['anonymous'] as bool? ?? false,
+      hideAvatar: row['hide_avatar'] as bool? ?? false,
+    );
+  }
 }
 
 class ForumMedia {
@@ -147,6 +176,8 @@ class CommunityForumService with ChangeNotifier {
 
   Future<void> _ensureLoaded() async {
     if (_loaded) return;
+    
+    // 1. Charger depuis le cache local d'abord
     final raw = StorageService.instance.getString(_kPosts);
     if (raw != null && raw.isNotEmpty) {
       try {
@@ -156,6 +187,34 @@ class CommunityForumService with ChangeNotifier {
         _posts = [];
       }
     }
+    
+    // 2. Charger depuis Supabase pour avoir les derniers posts
+    try {
+      await SupabaseService.ensureInitialized();
+      final rows = await SupabaseService.instance.select(
+        'forum_posts',
+        columns: 'id, author_id, author_name, category, text, medias, created_at, liked_by',
+        orderBy: 'created_at', 
+        ascending: false,
+        limit: 50, // Charger les 50 derniers posts
+      );
+      
+      if (rows.isNotEmpty) {
+        final supabasePosts = rows.map<ForumPost>((row) => ForumPost.fromSupabase(row)).toList();
+        
+        // Fusionner avec les posts locaux (éviter les doublons)
+        final existingIds = _posts.map((p) => p.id).toSet();
+        final newPosts = supabasePosts.where((p) => !existingIds.contains(p.id)).toList();
+        _posts.addAll(newPosts);
+        
+        // Sauvegarder le cache mis à jour
+        await _persist();
+      }
+    } catch (e) {
+      print('❌ Erreur chargement posts Supabase: $e');
+      // Continuer avec le cache local si Supabase échoue
+    }
+    
     _loaded = true;
   }
 
@@ -176,7 +235,7 @@ class CommunityForumService with ChangeNotifier {
       await SupabaseService.ensureInitialized();
       final rows = await SupabaseService.instance.select(
         'forum_posts',
-        columns: 'id, author_id, author_name, category, text, medias, created_at, liked_by, comments',
+        columns: 'id, author_id, author_name, category, text, medias, created_at, liked_by',
         orderBy: 'created_at', ascending: false,
         rangeFrom: from,
         rangeTo: to,

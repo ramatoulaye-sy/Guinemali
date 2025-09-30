@@ -2,22 +2,21 @@ import 'package:flutter/material.dart';
 import '../../core/services/supabase_service.dart';
 import 'dart:io';
 import 'package:provider/provider.dart';
-import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:video_player/video_player.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:share_plus/share_plus.dart';
-import '../../core/constants/app_constants.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/providers/auth_provider.dart';
+import 'package:go_router/go_router.dart';
+import '../../core/constants/app_constants.dart';
 import '../../core/services/community_forum_service.dart';
 // duplicate removed
 import '../../core/services/storage_service.dart';
 import 'dart:convert';
 
 /// Écran principal du nouveau forum communautaire (v1 - squelette fonctionnel)
-/// - Header interactif (chat, recherche, notifications, profil)
+/// - Header interactif (recherche, notifications, profil)
 /// - Catégories (Tous, Soutien, Conseil, Partage)
 /// - Flux (placeholder, à connecter Supabase)
 /// - Bouton "+ Nouveau post" (ouvre composer v1 minimal)
@@ -35,21 +34,12 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> with Ticker
   late final AnimationController _fabCtrl;
   late final Animation<double> _fabScale;
   String _searchQuery = '';
-  int _unreadCount = 0;
-  final GlobalKey _notifKey = GlobalKey();
   // double _scrollY = 0; // removed (unused)
   bool _loadingFeed = true;
-  late final AnimationController _headerCtrl;
-  late final Animation<Offset> _headerSlide;
-  late final Animation<double> _headerFade;
   static const int _pageSize = 20;
   int _page = 1;
   bool _isLoadingMore = false;
   DateTime _lastLoadMore = DateTime.fromMillisecondsSinceEpoch(0);
-  bool _notificationsDisabled = false;
-  final GlobalKey _titleKey = GlobalKey();
-  RealtimeChannel? _notifChannel;
-  String? _profileUrl;
 
   @override
   void initState() {
@@ -57,116 +47,18 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> with Ticker
     _fabCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
     _fabScale = CurvedAnimation(parent: _fabCtrl, curve: Curves.elasticOut);
     WidgetsBinding.instance.addPostFrameCallback((_) => _fabCtrl.forward());
-    _loadUnreadCount();
-    _loadProfilePhoto();
-    // Temps réel notifications
-    try {
-      SupabaseService.ensureInitialized().then((_) {
-        _notifChannel = SupabaseService.instance.subscribeToTable('notifications', (payload) {
-          if (mounted) _loadUnreadCount();
-        });
-      });
-    } catch (_) {}
-    // Scroll tracking géré via NotificationListener dans le ListView
     // Précharger la liste (simule un chargement pour afficher les skeletons)
     () async {
       try { await _forum.listPosts(); } catch (_) {}
       if (mounted) setState(() { _loadingFeed = false; });
     }();
-    // Animation d'apparition du header
-    _headerCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 380));
-    _headerSlide = Tween<Offset>(begin: const Offset(0, -0.2), end: Offset.zero).animate(CurvedAnimation(parent: _headerCtrl, curve: Curves.easeOut));
-    _headerFade = CurvedAnimation(parent: _headerCtrl, curve: Curves.easeOut);
-    WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) _headerCtrl.forward(); });
-  }
-  Future<void> _loadProfilePhoto() async {
-    try {
-      // 1) Lire depuis cache local immédiatement pour éviter le flash
-      try {
-        final cached = StorageService.instance.getString('profile_photo_url');
-        if ((cached != null && cached.isNotEmpty) && mounted) {
-          setState(() => _profileUrl = cached);
-        }
-      } catch (_) {}
-
-      // 2) Rafraîchir depuis la base
-      await SupabaseService.ensureInitialized();
-      final userId = SupabaseService.instance.currentUserId;
-      if (userId == null) return;
-      final rows = await SupabaseService.instance.select(
-        'utilisateurs',
-        columns: 'photo_url, avatar_url, image_url',
-        filters: {'id': userId},
-        limit: 1,
-      );
-      if (rows is List && rows.isNotEmpty) {
-        final m = rows.first as Map<String, dynamic>;
-        final url = (m['photo_url']?.toString() ?? '').isNotEmpty
-            ? m['photo_url'].toString()
-            : (m['avatar_url']?.toString() ?? '').isNotEmpty
-                ? m['avatar_url'].toString()
-                : (m['image_url']?.toString() ?? '').isNotEmpty
-                    ? m['image_url'].toString()
-                    : null;
-        if (url != null && url.isNotEmpty) {
-          try { await StorageService.instance.saveString('profile_photo_url', url); } catch (_) {}
-        }
-        if (mounted) setState(() => _profileUrl = url);
-      }
-    } catch (_) {}
-  }
-  Future<void> _loadUnreadCount() async {
-    if (_notificationsDisabled) return;
-    try {
-      await SupabaseService.ensureInitialized();
-      final rows = await SupabaseService.instance.select(
-        'notifications',
-        columns: 'id, is_read, read, read_at',
-        orderBy: 'created_at', ascending: false,
-        limit: 50,
-      );
-      final list = (rows as List).cast<Map<String, dynamic>>();
-      int count = 0;
-      for (final n in list) {
-        final isRead = (n['is_read'] == true) || (n['read'] == true) || (n['read_at'] != null);
-        if (!isRead) count++;
-      }
-      if (mounted) setState(() => _unreadCount = count);
-    } catch (_) { if (mounted) setState(() { _notificationsDisabled = true; }); }
   }
 
-  void _openSearch() async {
-    final result = await Navigator.of(context).push<Map<String, dynamic>>(
-      MaterialPageRoute(
-        builder: (_) => SearchPage(
-          initialQuery: _searchQuery,
-          categories: _categories,
-          selectedIndex: _selectedIndex,
-        ),
-      ),
-    );
-    if (result != null) {
-          setState(() {
-        _searchQuery = (result['query'] as String).trim();
-        _selectedIndex = result['index'] as int;
-      });
-    }
-  }
-
-  // Ancien fallback supprimé
-
-  void _openChat() {
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AnonHelpPage()));
-  }
 
 // (déplacé plus bas en top-level)
   @override
   void dispose() {
     _fabCtrl.dispose();
-    _headerCtrl.dispose();
-    if (_notifChannel != null) {
-      try { SupabaseService.instance.unsubscribe(_notifChannel!); } catch (_) {}
-    }
     super.dispose();
   }
 
@@ -174,37 +66,143 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> with Ticker
   Widget build(BuildContext context) {
     final auth = context.read<AuthProvider>();
     final user = auth.currentUser;
-
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(64),
-        child: SlideTransition(
-          position: _headerSlide,
-          child: FadeTransition(
-            opacity: _headerFade,
-            child: _Header(
-          displayName: user?.prenom ?? 'Invitée',
-          profileUrl: (user?.photoUrl != null && (user!.photoUrl!.isNotEmpty)) ? user.photoUrl : _profileUrl,
-          onChat: _openChat,
-          onSearch: _openSearch,
-          onNotifications: () async {
-            await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NotificationsPage()));
-            await _loadUnreadCount();
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF945acb),
+        foregroundColor: Colors.white,
+        toolbarHeight: 64,
+        iconTheme: const IconThemeData(color: Colors.white),
+        actionsIconTheme: const IconThemeData(color: Colors.white),
+        elevation: 0,
+        centerTitle: false,
+        leading: IconButton(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          constraints: const BoxConstraints(minWidth: 64, minHeight: 56),
+          iconSize: 28,
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else {
+              context.push(AppConstants.routeVictimDashboard);
+            }
           },
-          onProfile: () {
-            context.push(AppConstants.routeVictimProfile);
+        ),
+        titleSpacing: 0,
+        title: InkWell(
+          splashColor: Colors.white24,
+          highlightColor: Colors.white10,
+          onTap: () {
+            final messenger = ScaffoldMessenger.of(context);
+            messenger.hideCurrentMaterialBanner();
+            messenger.showMaterialBanner(
+              MaterialBanner(
+                backgroundColor: const Color(0xFF945acb),
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                leading: const Icon(Icons.info_outline, color: Colors.white),
+                content: const Text('Communauté', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                actions: const [SizedBox.shrink()],
+              ),
+            );
+            Future.delayed(const Duration(seconds: 2), () {
+              if (mounted) ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
+            });
           },
-          unreadCount: _unreadCount,
-          notificationsKey: _notifKey,
-          titleKey: _titleKey,
+          child: const SizedBox(
+            height: 56,
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Communauté', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+              ),
             ),
           ),
         ),
+        actions: [
+          IconButton(
+            padding: const EdgeInsets.all(10),
+            constraints: const BoxConstraints(minWidth: 56, minHeight: 56),
+            iconSize: 24,
+            icon: const Icon(Icons.search, color: Colors.white),
+            onPressed: () async {
+              final res = await Navigator.of(context).push<Map<String, dynamic>?>(
+                MaterialPageRoute(
+                  builder: (_) => SearchPage(initialQuery: _searchQuery, categories: _categories, selectedIndex: _selectedIndex),
+                ),
+              );
+              if (res != null) {
+                setState(() {
+                  _searchQuery = (res['query'] as String?) ?? '';
+                  _selectedIndex = (res['index'] as int?) ?? _selectedIndex;
+                });
+              }
+            },
+            tooltip: 'Rechercher',
+          ),
+          IconButton(
+            padding: const EdgeInsets.all(10),
+            constraints: const BoxConstraints(minWidth: 56, minHeight: 56),
+            iconSize: 24,
+            icon: const Icon(Icons.notifications_none, color: Colors.white),
+            onPressed: () async {
+              await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NotificationsPage()));
+            },
+            tooltip: 'Notifications',
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(999),
+              onTap: () { context.push(AppConstants.routeVictimProfile); },
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 56, minHeight: 56),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    FutureBuilder<dynamic>(
+                      future: SupabaseService.instance.select(
+                        'utilisateurs',
+                        columns: 'photo_url',
+                        filters: {'id': SupabaseService.instance.currentUserId},
+                        limit: 1,
+                      ),
+                      builder: (context, snapshot) {
+                        String? url;
+                        final list = snapshot.data as List<dynamic>?;
+                        if (list != null && list.isNotEmpty) {
+                          url = (list.first['photo_url'] as String?);
+                        }
+                        return CircleAvatar(
+                          radius: 16,
+                          backgroundColor: const Color(0xFFee82ee),
+                          backgroundImage: (url != null && url.isNotEmpty) ? NetworkImage(url) : null,
+                          child: (url == null || url.isEmpty)
+                              ? const Icon(Icons.person, size: 18, color: Colors.white)
+                              : null,
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 140),
+                      child: Text(
+                        (context.read<AuthProvider>().currentUser?.prenom) ?? 'Utilisateur',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
       body: Column(
         children: [
-          const SizedBox(height: 8),
           _CategoriesBar(
             categories: _categories,
             selectedIndex: _selectedIndex,
@@ -356,6 +354,7 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> with Ticker
       if (mounted) setState(() { _isLoadingMore = false; });
     });
   }
+
 }
 
 bool _isUrl(String s) {
@@ -463,158 +462,6 @@ class _FeedAudioState extends State<_FeedAudio> {
     final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
     final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$m:$s';
-  }
-}
-
-class _Header extends StatelessWidget {
-  final VoidCallback onChat;
-  final VoidCallback onSearch;
-  final VoidCallback onNotifications;
-  final VoidCallback onProfile;
-  final GlobalKey? titleKey;
-  final String displayName;
-  final String? profileUrl;
-  final int unreadCount;
-  final Key? notificationsKey;
-  // removed scrolled param (unused)
-
-  const _Header({
-    Key? key,
-    required this.onChat,
-    required this.onSearch,
-    required this.onNotifications,
-    required this.onProfile,
-    required this.displayName,
-    this.profileUrl,
-    this.unreadCount = 0,
-    this.notificationsKey,
-    this.titleKey,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return AppBar(
-      backgroundColor: const Color(0xFF945acb),
-      foregroundColor: Colors.white,
-      iconTheme: const IconThemeData(color: Colors.white),
-      actionsIconTheme: const IconThemeData(color: Colors.white),
-      elevation: 0,
-      centerTitle: false,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back, color: Colors.white),
-        onPressed: () {
-        if (Navigator.of(context).canPop()) {
-          Navigator.of(context).pop();
-        } else {
-          context.go(AppConstants.routeVictimDashboard);
-        }
-        },
-      ),
-      titleSpacing: 0,
-      title: GestureDetector(
-        key: titleKey,
-        onTap: () {
-          final ctx = titleKey?.currentContext;
-          if (ctx == null) return;
-          final box = ctx.findRenderObject() as RenderBox?;
-          final overlay = Overlay.of(ctx).context.findRenderObject() as RenderBox;
-          final target = box?.localToGlobal(Offset.zero, ancestor: overlay) ?? Offset.zero;
-          final size = box?.size ?? const Size(40, 40);
-          showMenu<void>(
-            context: ctx,
-            position: RelativeRect.fromLTRB(
-              target.dx,
-              target.dy + size.height,
-              overlay.size.width - target.dx - size.width,
-              overlay.size.height - target.dy,
-            ),
-            color: Colors.white,
-            items: const [
-              PopupMenuItem(enabled: false, child: Text('Communauté', style: TextStyle(fontWeight: FontWeight.w800, color: Colors.black87))),
-            ],
-          ).then((_) {
-            final primary = PrimaryScrollController.of(ctx);
-            primary.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
-          });
-        },
-        child: const Text('Communauté', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-      ),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.chat_bubble_outline, color: Colors.white),
-          onPressed: onChat,
-          tooltip: 'Chat',
-        ),
-        IconButton(
-          icon: const Icon(Icons.search, color: Colors.white),
-          onPressed: onSearch,
-          tooltip: 'Rechercher',
-        ),
-        Stack(
-          clipBehavior: Clip.none,
-              children: [
-                IconButton(
-              key: notificationsKey,
-              icon: const Icon(Icons.notifications_none, color: Colors.white),
-              onPressed: onNotifications,
-              tooltip: 'Notifications',
-            ),
-            if (unreadCount > 0)
-              Positioned(
-                right: 8,
-                top: 8,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEF4444),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  constraints: const BoxConstraints(minWidth: 18),
-                  child: Text(
-                    unreadCount > 9 ? '9+' : '$unreadCount',
-                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
-                  ),
-                ),
-                              ),
-                            ],
-                          ),
-        const SizedBox(width: 4),
-        GestureDetector(
-          onTap: onProfile,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Row(
-              mainAxisSize: MainAxisSize.min,
-                        children: [
-                CircleAvatar(
-                  radius: 16,
-                  backgroundColor: const Color(0xFFee82ee),
-                  backgroundImage: (profileUrl != null && profileUrl!.isNotEmpty)
-                      ? NetworkImage(profileUrl!)
-                      : null,
-                  child: (profileUrl == null || profileUrl!.isEmpty)
-                      ? const Icon(Icons.person, size: 18, color: Colors.white)
-                      : null,
-                ),
-                const SizedBox(width: 6),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 100),
-                            child: Text(
-                    displayName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                                color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-      ],
-    );
   }
 }
 
@@ -914,7 +761,7 @@ class _NotificationsSheetState extends State<_NotificationsSheet> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      children: [
             const Text('Notifications', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
             const SizedBox(height: 12),
             Wrap(
@@ -1433,9 +1280,9 @@ class _PostCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(
+          Text(
                       post.anonymous ? 'Anonyme' : post.authorName,
-                      style: TextStyle(
+            style: TextStyle(
                         fontWeight: FontWeight.w800,
                         color: post.anonymous ? const Color(0xFF945acb) : Colors.black87,
                         fontStyle: post.anonymous ? FontStyle.italic : FontStyle.normal,
@@ -2809,7 +2656,10 @@ class _VideoPreviewTileState extends State<_VideoPreviewTile> {
   void initState() {
     super.initState();
     _controller = VideoPlayerController.file(File(widget.path))
-      ..initialize().then((_) { if (mounted) setState(() { _init = true; }); });
+      ..initialize().then((_) { 
+        if (mounted) setState(() { _init = true; }); 
+        // DÉSACTIVER L'AUTO-PLAY - vidéos en pause par défaut
+      });
   }
 
   @override
@@ -2972,7 +2822,10 @@ class _FeedVideoState extends State<_FeedVideo> {
     _c = _isUrl(widget.path)
         ? VideoPlayerController.networkUrl(Uri.parse(widget.path))
         : VideoPlayerController.file(File(widget.path))
-      ..initialize().then((_) { if (mounted) setState(() { _init = true; }); });
+      ..initialize().then((_) { 
+        if (mounted) setState(() { _init = true; }); 
+        // DÉSACTIVER L'AUTO-PLAY - vidéos en pause par défaut
+      });
   }
 
   @override
@@ -3065,7 +2918,7 @@ class _MediaTile extends StatelessWidget {
               ],
             ),
           ),
-        );
+      );
     }
   }
 }

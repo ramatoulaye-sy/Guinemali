@@ -503,52 +503,52 @@ class _VictimProfileScreenState extends State<VictimProfileScreen> with SingleTi
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppConstants.backgroundColor,
-             appBar: AppBar(
-         title: Row(
-           children: [
-             Container(
-               padding: const EdgeInsets.all(8),
-               decoration: BoxDecoration(
+      appBar: AppBar(
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
                  color: Colors.white.withOpacity(0.2),
-                 borderRadius: BorderRadius.circular(12),
-               ),
-               child: Icon(
-                 Icons.person,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                Icons.person,
                  color: Colors.white,
-                 size: 20,
-               ),
-             ),
-             const SizedBox(width: 12),
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
             Flexible(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Mon Profil',
-                    style: TextStyle(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Mon Profil',
+                  style: TextStyle(
                       color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                    ),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
                   ),
-                  Text(
-                    'Gérez vos informations',
-                    style: TextStyle(
+                ),
+                Text(
+                  'Gérez vos informations',
+                  style: TextStyle(
                       color: Colors.white.withOpacity(0.8),
-                      fontSize: 11,
-                    ),
+                    fontSize: 11,
+                  ),
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
-                  ),
-                ],
+                ),
+              ],
               ),
             ),
-           ],
-         ),
+          ],
+        ),
          backgroundColor: AppConstants.primaryColor,
          foregroundColor: Colors.white,
-         elevation: 0,
+        elevation: 0,
          shape: const RoundedRectangleBorder(
            borderRadius: BorderRadius.vertical(
              bottom: Radius.circular(20),
@@ -557,17 +557,17 @@ class _VictimProfileScreenState extends State<VictimProfileScreen> with SingleTi
 
 
 
-                   actions: [
-            if (!_isEditing) ...[
-              _buildActionButton(
-                icon: Icons.edit_rounded,
-                onPressed: () => setState(() => _isEditing = true),
-                tooltip: 'Modifier le profil',
-              ),
-              const SizedBox(width: 8),
-            ],
+        actions: [
+          if (!_isEditing) ...[
+            _buildActionButton(
+              icon: Icons.edit_rounded,
+              onPressed: () => setState(() => _isEditing = true),
+              tooltip: 'Modifier le profil',
+            ),
+            const SizedBox(width: 8),
           ],
-       ),
+        ],
+      ),
       body: _isLoading
           ? Container(
               color: AppConstants.backgroundColor,
@@ -602,23 +602,23 @@ class _VictimProfileScreenState extends State<VictimProfileScreen> with SingleTi
               ),
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(20),
-                                 child: Column(
-                   crossAxisAlignment: CrossAxisAlignment.start,
-                   children: [
-                     _buildProfileHeader().animate().fadeIn(duration: _animationDuration).slideY(begin: 0.3, end: 0),
-                     const SizedBox(height: 24),
-                    _buildProfileForm().animate().fadeIn(delay: _staggerDelay, duration: _animationDuration).slideY(begin: 0.3, end: 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildProfileHeader().animate().fadeIn(duration: _animationDuration).slideY(begin: 0.3, end: 0),
                     const SizedBox(height: 24),
+                    _buildProfileForm().animate().fadeIn(delay: _staggerDelay, duration: _animationDuration).slideY(begin: 0.3, end: 0),
+                      const SizedBox(height: 24),
                     _buildPreferencesSection().animate().fadeIn(delay: _staggerDelay * 2, duration: _animationDuration).slideY(begin: 0.3, end: 0),
                     const SizedBox(height: 24),
                     _buildActionsSection().animate().fadeIn(delay: _staggerDelay * 3, duration: _animationDuration).slideY(begin: 0.3, end: 0),
                     if (_isEditing) ...[
-                      const SizedBox(height: 24),
+                    const SizedBox(height: 24),
                       _buildActionButtons().animate().fadeIn(delay: _staggerDelay * 4, duration: _animationDuration).slideY(begin: 0.3, end: 0),
                     ],
-                     const SizedBox(height: 32),
-                   ],
-                 ),
+                    const SizedBox(height: 32),
+                  ],
+                ),
               ),
             ),
     );
@@ -654,7 +654,7 @@ class _VictimProfileScreenState extends State<VictimProfileScreen> with SingleTi
                                 // Photo de profil cliquable
            GestureDetector(
              onTap: _showImagePickerDialog,
-            child: Stack(
+             child: Stack(
                children: [
                 // Halo animé
                 AnimatedBuilder(
@@ -677,7 +677,7 @@ class _VictimProfileScreenState extends State<VictimProfileScreen> with SingleTi
                     );
                   },
                 ),
-                AnimatedContainer(
+                 AnimatedContainer(
                    duration: _animationDuration,
                    width: 120,
                    height: 120,
@@ -696,11 +696,11 @@ class _VictimProfileScreenState extends State<VictimProfileScreen> with SingleTi
                        ),
                      ],
                    ),
-                  child: ClipOval(
-                    child: _profileImage != null
-                        ? Image.file(
-                            _profileImage!,
-                            fit: BoxFit.cover,
+                   child: ClipOval(
+                     child: _profileImage != null
+                         ? Image.file(
+                             _profileImage!,
+                             fit: BoxFit.cover,
                             errorBuilder: (context, error, stackTrace) => _buildDefaultProfileIcon(),
                           )
                         : (_photoUrl != null && _photoUrl!.isNotEmpty)
@@ -708,9 +708,9 @@ class _VictimProfileScreenState extends State<VictimProfileScreen> with SingleTi
                                 _photoUrl!,
                                 fit: BoxFit.cover,
                                 errorBuilder: (context, error, stackTrace) => _buildDefaultProfileIcon(),
-                              )
-                            : _buildDefaultProfileIcon(),
-                  ),
+                           )
+                         : _buildDefaultProfileIcon(),
+                   ),
                  ),
                  // Indicateur de modification
                  Positioned(
@@ -776,7 +776,7 @@ class _VictimProfileScreenState extends State<VictimProfileScreen> with SingleTi
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
+          Text(
                 'En ligne',
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.8),
@@ -786,7 +786,7 @@ class _VictimProfileScreenState extends State<VictimProfileScreen> with SingleTi
               ),
             ],
           ),
-            const SizedBox(height: 16),
+          const SizedBox(height: 16),
           // chip statut simplifié
           const SizedBox(height: 8),
         ],
@@ -827,11 +827,11 @@ class _VictimProfileScreenState extends State<VictimProfileScreen> with SingleTi
         duration: const Duration(milliseconds: 220),
         child: _isEditing
             ? Form(
-                key: _formKey,
-                child: Column(
+      key: _formKey,
+      child: Column(
                   key: const ValueKey('edit'),
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
             // Titre de la section
             Row(
               children: [
@@ -853,62 +853,62 @@ class _VictimProfileScreenState extends State<VictimProfileScreen> with SingleTi
             ),
             const SizedBox(height: 20),
             // Champs du formulaire
-            _buildTextField(
-              controller: _firstNameController,
-              label: 'Prénom',
-              icon: Icons.person_outline,
+          _buildTextField(
+            controller: _firstNameController,
+            label: 'Prénom',
+            icon: Icons.person_outline,
               enabled: true,
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Le prénom est requis';
-                }
-                return null;
-              },
-            ),
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Le prénom est requis';
+              }
+              return null;
+            },
+          ),
             const SizedBox(height: 20),
-            _buildTextField(
-              controller: _lastNameController,
+          _buildTextField(
+            controller: _lastNameController,
               label: 'Pseudo',
               icon: Icons.alternate_email,
               enabled: true,
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
                   return 'Le pseudo est requis';
-                }
-                return null;
-              },
-            ),
+              }
+              return null;
+            },
+          ),
             const SizedBox(height: 20),
-            _buildTextField(
-              controller: _phoneController,
-              label: 'Téléphone',
-              icon: Icons.phone_outlined,
+          _buildTextField(
+            controller: _phoneController,
+            label: 'Téléphone',
+            icon: Icons.phone_outlined,
               enabled: true,
-              keyboardType: TextInputType.phone,
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Le téléphone est requis';
-                }
-                return null;
-              },
-            ),
+            keyboardType: TextInputType.phone,
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Le téléphone est requis';
+              }
+              return null;
+            },
+          ),
             const SizedBox(height: 20),
-            _buildTextField(
-              controller: _emailController,
-              label: 'Email',
-              icon: Icons.email_outlined,
+          _buildTextField(
+            controller: _emailController,
+            label: 'Email',
+            icon: Icons.email_outlined,
               enabled: true,
-              keyboardType: TextInputType.emailAddress,
-              validator: (value) {
+            keyboardType: TextInputType.emailAddress,
+            validator: (value) {
                 if (value != null && value.trim().isNotEmpty) {
                   final regex = RegExp(r'^[\w\.-]+@([\w-]+\.)+[\w-]{2,4}$');
                   if (!regex.hasMatch(value)) {
-                    return 'Format d\'email invalide';
+                return 'Format d\'email invalide';
                   }
-                }
-                return null;
-              },
-            ),
+              }
+              return null;
+            },
+          ),
             const SizedBox(height: 20),
             _buildLanguageAndRegion(),
             const SizedBox(height: 20),
@@ -988,7 +988,7 @@ class _VictimProfileScreenState extends State<VictimProfileScreen> with SingleTi
                 const SizedBox(height: 12),
                   _StaticInfoRow(icon: Icons.email_outlined, label: 'Email', value: _emailController.text.isEmpty ? 'Non renseigné' : _emailController.text, mutedIfEmpty: true),
                 ],
-              ),
+        ),
       ),
     );
   }
@@ -1073,8 +1073,8 @@ class _VictimProfileScreenState extends State<VictimProfileScreen> with SingleTi
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
           Row(
             children: [
               Container(
@@ -1091,9 +1091,9 @@ class _VictimProfileScreenState extends State<VictimProfileScreen> with SingleTi
               ),
               const SizedBox(width: 12),
               Text('Préférences', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppConstants.primaryColor)),
-            ],
-          ),
-          const SizedBox(height: 16),
+          ],
+        ),
+           const SizedBox(height: 16),
           SwitchListTile(
             value: _prefHideAvatar,
             onChanged: (v) {
@@ -1120,7 +1120,7 @@ class _VictimProfileScreenState extends State<VictimProfileScreen> with SingleTi
             },
             title: const Text('Notifications activées', style: TextStyle(color: Colors.black87)),
             activeColor: AppConstants.primaryColor,
-          ),
+           ),
         ],
       ),
     );
@@ -1159,12 +1159,12 @@ class _VictimProfileScreenState extends State<VictimProfileScreen> with SingleTi
             ],
           ),
           const SizedBox(height: 12),
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 2,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
+           GridView.count(
+             shrinkWrap: true,
+             physics: const NeverScrollableScrollPhysics(),
+             crossAxisCount: 2,
+             crossAxisSpacing: 12,
+             mainAxisSpacing: 12,
             childAspectRatio: 2.8,
             children: [
               _ActionTile(icon: Icons.security, label: 'Sécurité', color: AppConstants.primaryColor, onTap: () => context.push(AppConstants.routeVictimSecurity)),
@@ -1215,12 +1215,12 @@ class _VictimProfileScreenState extends State<VictimProfileScreen> with SingleTi
               const SizedBox(width: 12),
               Text(
                 'Actions',
-                style: TextStyle(
+                   style: TextStyle(
                   fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: AppConstants.primaryColor,
-                ),
-              ),
+                     fontWeight: FontWeight.bold,
+                     color: AppConstants.primaryColor,
+                 ),
+               ),
             ],
           ),
           const SizedBox(height: 24),
@@ -1250,19 +1250,19 @@ class _VictimProfileScreenState extends State<VictimProfileScreen> with SingleTi
                           ),
                         )
                       : Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
                             const Icon(Icons.save, size: 20),
                             const SizedBox(width: 8),
                             const Text(
                               'Sauvegarder',
-                              style: TextStyle(
+              style: TextStyle(
                                 fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
+                fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
                 ),
               ),
               const SizedBox(width: 16),
@@ -1275,32 +1275,32 @@ class _VictimProfileScreenState extends State<VictimProfileScreen> with SingleTi
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 18),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(12),
                     ),
                     side: BorderSide(
                       color: AppConstants.secondaryColor,
                       width: 2,
-                    ),
-                  ),
-                  child: Row(
+          ),
+        ),
+        child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
+          children: [
                       Icon(
                         Icons.cancel,
-                        size: 20,
+                size: 20,
                         color: AppConstants.secondaryColor,
                       ),
                       const SizedBox(width: 8),
-                      Text(
+                  Text(
                         'Annuler',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                    style: TextStyle(
+                      fontSize: 16,
+                fontWeight: FontWeight.bold,
                           color: AppConstants.secondaryColor,
-                        ),
-                      ),
-                    ],
-                  ),
+              ),
+            ),
+          ],
+        ),
                 ),
               ),
             ],
@@ -1385,7 +1385,7 @@ class _VictimProfileScreenState extends State<VictimProfileScreen> with SingleTi
         child: Center(
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: [
+          children: [
               Icon(icon, color: color, size: 18),
               const SizedBox(width: 8),
               Text(label, style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w600)),
@@ -1413,7 +1413,7 @@ class _StaticInfoRow extends StatelessWidget {
     final isEmpty = value.trim().isEmpty || value == '—' || value == 'Non renseigné';
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
+              children: [
         Icon(icon, color: Colors.grey.shade600, size: 18),
         const SizedBox(width: 8),
         Expanded(
@@ -1422,16 +1422,16 @@ class _StaticInfoRow extends StatelessWidget {
             children: [
               Text(label, style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w500)),
               const SizedBox(height: 2),
-              Text(
+                Text(
                 value,
-                style: TextStyle(
+                  style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: mutedIfEmpty && isEmpty ? Colors.grey.shade500 : Colors.black87,
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
         ),
       ],
     );

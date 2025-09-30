@@ -1120,7 +1120,7 @@ class _VictimHelpScreenState extends State<VictimHelpScreen> {
                       A11yService.announceIfEnabled(context, 'Diagnostic des permissions');
                       // Ouvre la page permissions existante
                       if (!mounted) return;
-                      Navigator.of(context).pushNamed('/victim/permissions');
+                      context.go(AppConstants.routePermissions);
                     },
                   ),
                 ),

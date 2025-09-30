@@ -181,9 +181,9 @@ class AppBuilder {
                         snackBarTheme: theme.snackBarTheme.copyWith(
                           backgroundColor: AppConstants.primaryColor,
                           contentTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-                        ),
-                      );
-                    }
+              ),
+            );
+          }
                     Widget tree = MediaQuery(data: media, child: Theme(data: theme, child: base));
                     if (locale != null) {
                       tree = Localizations.override(context: context, locale: locale, child: tree);

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/constants/app_constants.dart';
@@ -86,6 +87,9 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
           _alertId = alert['id'] as String;
         });
         
+        // Utiliser l'alerte chargée
+        print('📋 Alerte active: ${_currentAlert?['type']} - ${_currentAlert?['description']}');
+        
         // Charger les preuves associées
         await _loadEvidences();
       } else {
@@ -99,6 +103,10 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
             _currentAlert = retryAlert;
             _alertId = retryAlert['id'] as String;
           });
+          
+          // Utiliser l'alerte retry
+          print('📋 Alerte retry: ${_currentAlert?['type']} - ${_currentAlert?['description']}');
+          
           await _loadEvidences();
         } else {
           print('❌ Aucune alerte trouvée après retry');
@@ -114,7 +122,7 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
             // Retourner au dashboard après un délai
             Future.delayed(const Duration(seconds: 3), () {
               if (mounted) {
-                Navigator.of(context).pushReplacementNamed('/victim/dashboard');
+                context.go(AppConstants.routeVictimDashboard);
               }
             });
           }
@@ -142,6 +150,12 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
         setState(() {
           _evidences = evidences;
         });
+        
+        // Utiliser les preuves chargées
+        print('📁 Preuves chargées: ${_evidences.length} éléments');
+        for (final evidence in _evidences) {
+          print('📄 Preuve: ${evidence['type']} - ${evidence['timestamp']}');
+        }
       }
     } catch (e) {
       print('❌ Erreur lors du chargement des preuves: $e');

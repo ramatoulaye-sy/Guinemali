@@ -63,13 +63,16 @@ class AppRouter {
 
       print('🔄 Redirection - Route: $currentRoute, Authentifié: $isLoggedIn');
 
-      // Ne jamais bloquer l'accès à l'écran d'alerte active
+      // Ne jamais bloquer l'accès à l'écran d'alerte active - PERMET LA NAVIGATION
       if (currentRoute == AppConstants.routeVictimActiveAlert) {
+        print('✅ Accès autorisé à l\'écran d\'alerte active');
         return null;
       }
 
-      // Éviter toute redirection quand on est déjà sur une route victime
+      // Éviter toute redirection quand on est déjà sur une route victime (sauf cas spéciaux)
       if (isLoggedIn && currentRoute.startsWith('/victim/')) {
+        // Ne jamais rediriger si on est déjà où on doit être
+        print('✅ Route victime autorisée: $currentRoute');
         return null;
       }
 

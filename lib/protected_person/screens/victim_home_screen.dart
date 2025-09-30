@@ -17,7 +17,7 @@ import '../../core/widgets/responsive_builder.dart';
 import '../../core/widgets/loading_widgets.dart';
 import '../../core/widgets/accessibility_widgets.dart';
 import '../../core/widgets/gesture_navigation.dart';
-import '../widgets/sos_button.dart';
+// import '../widgets/sos_button.dart'; // Supprimé pour éviter les conflits
 import '../widgets/quick_actions_panel.dart';
 import '../widgets/victim_status_card.dart';
 import '../widgets/emergency_plan_widget.dart';
@@ -180,143 +180,25 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
   }
 
   Future<void> _triggerEmergencyAlert() async {
-    if (_isLoading) return;
-
-    // Vérifier que l'utilisateur est connecté (ne bloque plus la navigation)
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    if (authProvider.currentUser == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Mode hors ligne: l\'alerte sera synchronisée plus tard'),
-            backgroundColor: AppConstants.warningColor,
-          ),
-        );
-      }
-    }
-
-    setState(() {
-      _isLoading = true;
-      _isEmergencyMode = true;
-    });
-
-    try {
-      if (AppConstants.enableLogging) {
-        print('🚨 Déclenchement de l\'alerte SOS...');
-        print('👤 Utilisateur: ${authProvider.currentUser!.prenom} (ID: ${authProvider.currentUser!.id})');
-      }
-
-      // Vibration tactile
-      HapticFeedback.heavyImpact();
-      
-      // Animation d'urgence
-      _backgroundController.forward();
-
-      // Obtenir rapidement la dernière position connue, sinon (0,0)
-      Position? position;
-      double latitude = 0.0;
-      double longitude = 0.0;
-      try {
-        position = await GeolocationService.instance.getLastKnownPosition();
-        if (position != null) {
-          latitude = position.latitude;
-          longitude = position.longitude;
-        }
-      } catch (_) {}
-
-      // Lancer la récupération de position actuelle sans bloquer
-      Future(() async {
-        try { await GeolocationService.instance.getCurrentPosition(); } catch (_) {}
-      });
-
-      // Créer l'alerte D'ABORD
-      print('🚨 Création de l\'alerte d\'urgence...');
-      final alertId = await AlertService.instance.createEmergencyAlert(
-        latitude: latitude,
-        longitude: longitude,
-        type: 'urgence',
-        dangerLevel: 5,
+    // Redirection vers le dashboard pour utiliser le bouton SOS principal
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Redirection vers le dashboard pour déclencher l\'alerte SOS'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 2),
+        ),
       );
       
-      print('✅ Alerte créée avec succès: $alertId');
-
-      // Attendre que l'alerte soit complètement sauvegardée
-      await Future.delayed(const Duration(milliseconds: 200));
+      // Attendre un peu pour que l'utilisateur voie le message
+      await Future.delayed(const Duration(milliseconds: 500));
       
-      // Vérifier que l'alerte est bien sauvegardée avant navigation
-      final savedAlertId = StorageService.instance.getString(AppConstants.keyCurrentAlertId);
-      if (savedAlertId != alertId) {
-        print('⚠️ Alerte non sauvegardée correctement, nouvelle tentative...');
-        await StorageService.instance.saveString(AppConstants.keyCurrentAlertId, alertId);
-        await Future.delayed(const Duration(milliseconds: 100));
-      }
-
-      // Navigation UNIQUE et SÉCURISÉE vers l'écran d'alerte active
-      if (mounted) {
-        print('🧭 Navigation vers l\'écran d\'alerte active...');
-        try {
-          context.goNamed('victim_active_alert');
-        } catch (e) {
-          print('❌ Erreur navigation goNamed: $e');
-          try { 
-            context.go(AppConstants.routeVictimActiveAlert); 
-          } catch (e2) {
-            print('❌ Erreur navigation go: $e2');
-            throw Exception('Impossible de naviguer vers l\'écran d\'alerte');
-          }
-        }
-      }
-
-      // Continuer les opérations en arrière-plan (non bloquantes)
-      Future(() async {
-        try {
-          // Démarrer l'enregistrement automatique des preuves (meilleur effort)
-          if (alertId.isNotEmpty) {
-            try {
-              await EvidenceService.instance.startEvidenceRecording(alertId);
-              if (AppConstants.enableLogging) {
-                print('📹 Enregistrement des preuves démarré');
-              }
-            } catch (e) {
-              if (AppConstants.enableLogging) {
-                print('⚠️ Erreur enregistrement preuves: $e');
-              }
-            }
-          }
-
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('🚨 ALERTE DÉCLENCHÉE - Aide en route'),
-                backgroundColor: AppConstants.alertActiveColor,
-              ),
-            );
-          }
-        } catch (e) {
-          print('❌ Erreur lors des opérations en arrière-plan: $e');
-        }
-      });
-      
-    } catch (e) {
-      print('❌ Erreur lors du déclenchement de l\'alerte: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erreur lors du déclenchement: $e'),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 4),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      // Naviguer vers le dashboard
+      context.go(AppConstants.routeVictimDashboard);
     }
-    
   }
+
+  // Méthode supprimée - Utilisez uniquement le bouton SOS du dashboard
 
 
 
@@ -426,12 +308,32 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
         
         const SizedBox(height: AppConstants.spacingLarge),
         
-        // Bouton SOS principal
-        Center(
-          child: SOSButton(
-            onPressed: _triggerEmergencyAlert,
-            isLoading: _isLoading,
-            pulseController: _pulseController,
+        // Message informatif pour rediriger vers le dashboard
+        Container(
+          padding: const EdgeInsets.all(16),
+          margin: const EdgeInsets.symmetric(horizontal: 24),
+          decoration: BoxDecoration(
+            color: Colors.orange.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.orange.withOpacity(0.3)),
+          ),
+          child: Column(
+            children: [
+              Icon(
+                Icons.info_outline,
+                color: Colors.orange[700],
+                size: 32,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Pour déclencher une alerte SOS, utilisez le bouton principal du dashboard',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.orange[700],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
         ),
         
@@ -472,15 +374,32 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
             children: [
               _buildHeader(user?.prenom ?? ''),
               const SizedBox(height: AppConstants.spacingLarge),
-              Center(
-                child: SizedBox(
-                  width: 300,
-                  height: 300,
-                  child: SOSButton(
-                    onPressed: _triggerEmergencyAlert,
-                    isLoading: _isLoading,
-                    pulseController: _pulseController,
-                  ),
+              // Message informatif pour rediriger vers le dashboard
+              Container(
+                padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.symmetric(horizontal: 24),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                ),
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      color: Colors.orange[700],
+                      size: 32,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Pour déclencher une alerte SOS, utilisez le bouton principal du dashboard',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.orange[700],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -568,17 +487,48 @@ class _VictimHomeScreenState extends State<VictimHomeScreen>
           ),
         ),
         
-        // Colonne centrale (SOS)
+        // Colonne centrale (Message informatif)
         Expanded(
           flex: 2,
           child: Center(
-            child: SizedBox(
+            child: Container(
               width: 400,
               height: 400,
-              child: SOSButton(
-                onPressed: _triggerEmergencyAlert,
-                isLoading: _isLoading,
-                pulseController: _pulseController,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.orange.withOpacity(0.3), width: 2),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    color: Colors.orange[700],
+                    size: 64,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Pour déclencher une alerte SOS, utilisez le bouton principal du dashboard',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.orange[700],
+                      fontWeight: FontWeight.w600,
+                      fontSize: 18,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: () => context.go(AppConstants.routeVictimDashboard),
+                    icon: const Icon(Icons.dashboard),
+                    label: const Text('Aller au Dashboard'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange[700],
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
