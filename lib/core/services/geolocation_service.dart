@@ -25,7 +25,11 @@ class GeolocationService {
       // Vérifier le statut du service de localisation
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        throw Exception('Service de localisation désactivé');
+        if (AppConstants.enableLogging) {
+          print('❌ Service de localisation désactivé');
+        }
+        // Ne pas jeter d'exception: on laissera l'appelant gérer le fallback
+        return false;
       }
 
       // Vérifier les permissions
@@ -34,7 +38,10 @@ class GeolocationService {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-          throw Exception('Permission de localisation refusée');
+          if (AppConstants.enableLogging) {
+            print('❌ Permission de localisation refusée');
+          }
+          return false;
         }
       }
 
@@ -44,7 +51,7 @@ class GeolocationService {
           await Geolocator.openAppSettings();
           await Geolocator.openLocationSettings();
         }
-        throw Exception('Permission de localisation refusée définitivement');
+        return false;
       }
 
       // Sur Web, on s'arrête ici (pas de demande via permission_handler)
@@ -84,7 +91,7 @@ class GeolocationService {
       if (AppConstants.enableLogging) {
         print('❌ Erreur permissions de localisation: $e');
       }
-      rethrow;
+      return false;
     }
   }
 
@@ -92,7 +99,13 @@ class GeolocationService {
   Future<Position> getCurrentPosition() async {
     try {
       // Vérifier les permissions d'abord
-      await checkPermissions();
+      final ok = await checkPermissions();
+      if (!ok) {
+        // Essayer une position connue si possible
+        final last = await getLastKnownPosition();
+        if (last != null) return last;
+        throw Exception('Service de localisation désactivé');
+      }
 
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
@@ -167,7 +180,7 @@ class GeolocationService {
             'position_lat': pos.latitude,
             'position_lng': pos.longitude,
             'precision_m': pos.accuracy,
-            'timestamp': pos.timestamp?.toUtc().toIso8601String(),
+            'timestamp': pos.timestamp.toUtc().toIso8601String(),
           }, onConflict: 'id', ignoreDuplicates: true);
           await StorageService.instance.markLocationSynced(locationId);
           if (AppConstants.enableLogging) {
@@ -184,7 +197,7 @@ class GeolocationService {
             'position_lat': pos.latitude,
             'position_lng': pos.longitude,
             'precision_m': pos.accuracy,
-            'timestamp': pos.timestamp?.toUtc().toIso8601String(),
+            'timestamp': pos.timestamp.toUtc().toIso8601String(),
           });
         }
         

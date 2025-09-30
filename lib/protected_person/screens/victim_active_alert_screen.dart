@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
@@ -8,7 +9,8 @@ import '../../core/constants/app_constants.dart';
 import '../../core/services/emergency_contact_service.dart';
 import '../../core/services/alert_service.dart';
 import '../../core/services/evidence_service.dart';
-import 'dart:async';
+import '../../core/services/storage_service.dart';
+import '../../core/services/audio_recording_service.dart'; // Added import for AudioRecordingService
 
 /// Écran d'alerte d'urgence active avec design expert et 30 ans d'expérience
 class VictimActiveAlertScreen extends StatefulWidget {
@@ -71,6 +73,9 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
     _alertStartTime = DateTime.now();
     _elapsedTime = Duration.zero;
     
+    // S'assurer que le stockage est prêt (clé d'alerte lue/écrite correctement)
+    try { await StorageService.ensureInitialized(); } catch (_) {}
+    
     // Charger l'alerte locale actuelle
     await _loadCurrentAlert();
   }
@@ -86,6 +91,8 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
           _currentAlert = alert;
           _alertId = alert['id'] as String;
         });
+        // Consommer le flag d'ouverture automatique pour éviter redirections futures
+        try { await StorageService.instance.remove('current_alert_should_open'); } catch (_) {}
         
         // Utiliser l'alerte chargée
         print('📋 Alerte active: ${_currentAlert?['type']} - ${_currentAlert?['description']}');
@@ -109,22 +116,35 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
           
           await _loadEvidences();
         } else {
-          print('❌ Aucune alerte trouvée après retry');
-          // Afficher un message d'erreur à l'utilisateur
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('⚠️ Aucune alerte active trouvée. Retour au dashboard...'),
-                backgroundColor: Colors.orange,
-                duration: Duration(seconds: 3),
-              ),
-            );
-            // Retourner au dashboard après un délai
-            Future.delayed(const Duration(seconds: 3), () {
-              if (mounted) {
-                context.go(AppConstants.routeVictimDashboard);
-              }
+          // Troisième essai avec backoff un peu plus long
+          await Future.delayed(const Duration(milliseconds: 400));
+          final retryAlert3 = await AlertService.instance.getCurrentAlert();
+          if (retryAlert3 != null) {
+            print('✅ Alerte trouvée au troisième essai: ${retryAlert3['id']}');
+            setState(() {
+              _currentAlert = retryAlert3;
+              _alertId = retryAlert3['id'] as String;
             });
+            try { await StorageService.instance.remove('current_alert_should_open'); } catch (_) {}
+            await _loadEvidences();
+          } else {
+            print('❌ Aucune alerte trouvée après 3 essais');
+            // Afficher un message d'erreur à l'utilisateur
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('⚠️ Aucune alerte active trouvée. Retour au dashboard...'),
+                  backgroundColor: Colors.orange,
+                  duration: Duration(seconds: 3),
+                ),
+              );
+              // Retourner au dashboard après un délai
+              Future.delayed(const Duration(seconds: 3), () {
+                if (mounted) {
+                  context.go(AppConstants.routeVictimDashboard);
+                }
+              });
+            }
           }
         }
       }
@@ -213,10 +233,19 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppConstants.backgroundColor,
-      appBar: _buildExpertAppBar(),
-      body: _buildExpertBody(),
+    return WillPopScope(
+      onWillPop: () async {
+        try { await StorageService.instance.remove('current_alert_should_open'); } catch (_) {}
+        if (mounted) {
+          context.go(AppConstants.routeVictimDashboard);
+        }
+        return false;
+      },
+      child: Scaffold(
+        backgroundColor: AppConstants.backgroundColor,
+        appBar: _buildExpertAppBar(),
+        body: _buildExpertBody(),
+      ),
     );
   }
 
@@ -226,6 +255,16 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
         elevation: 0,
       backgroundColor: AppConstants.primaryColor,
       foregroundColor: Colors.white,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back),
+        tooltip: 'Retour',
+        onPressed: () async {
+          try { await StorageService.instance.remove('current_alert_should_open'); } catch (_) {}
+          if (mounted) {
+            context.go(AppConstants.routeVictimDashboard);
+          }
+        },
+      ),
       title: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -245,7 +284,7 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: (_isGpsTracking ? Colors.green : Colors.red).withValues(alpha: 0.6),
+                      color: (_isGpsTracking ? Colors.green : Colors.red).withOpacity(0.6),
                       blurRadius: 6 + (3 * _pulseController.value),
                       spreadRadius: 1 + (1 * _pulseController.value),
                     ),
@@ -276,7 +315,7 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
           margin: const EdgeInsets.only(right: 8),
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: _isGpsTracking ? Colors.green.withValues(alpha: 0.2) : Colors.red.withValues(alpha: 0.2),
+            color: _isGpsTracking ? Colors.green.withOpacity(0.2) : Colors.red.withOpacity(0.2),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: _isGpsTracking ? Colors.green : Colors.red,
@@ -307,7 +346,7 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
         // Bouton d'aide rapide avec indicateur de statut
         Container(
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.1),
+            color: Colors.white.withOpacity(0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: IconButton(
@@ -320,7 +359,7 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
         // Bouton de paramètres avec indicateur de statut
         Container(
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.1),
+            color: Colors.white.withOpacity(0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: IconButton(
@@ -376,6 +415,11 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
             
             const SizedBox(height: 32),
             
+            // Boutons principaux: Sécurité et Fausse alerte
+            _buildSafetyButtons(),
+
+            const SizedBox(height: 16),
+
             // Bouton d'annulation avec design d'urgence
             _buildExpertCancelButton(),
           ],
@@ -454,7 +498,7 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: AppConstants.primaryColor.withValues(alpha: 0.3),
+            color: AppConstants.primaryColor.withOpacity(0.3),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -470,10 +514,10 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
                 width: 60,
                 height: 60,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
+                  color: Colors.white.withOpacity(0.2),
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.4),
+                    color: Colors.white.withOpacity(0.4),
                     width: 2,
                   ),
                 ),
@@ -502,10 +546,10 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
               Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
+                  color: Colors.white.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: Colors.white.withValues(alpha: 0.3),
+                color: Colors.white.withOpacity(0.3),
                 width: 1,
               ),
             ),
@@ -564,13 +608,13 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: color.withValues(alpha: 0.1),
+            color: color.withOpacity(0.1),
             blurRadius: 15,
             offset: const Offset(0, 5),
           ),
         ],
         border: Border.all(
-          color: color.withValues(alpha: 0.2),
+          color: color.withOpacity(0.2),
           width: 1,
         ),
       ),
@@ -579,7 +623,7 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
+              color: color.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: color, size: 24),
@@ -617,7 +661,7 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withValues(alpha: 0.1),
+            color: Colors.grey.withOpacity(0.1),
             blurRadius: 15,
             offset: const Offset(0, 5),
           ),
@@ -632,7 +676,7 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: AppConstants.primaryColor.withValues(alpha: 0.1),
+                  color: AppConstants.primaryColor.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
@@ -750,18 +794,18 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
             padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: isActive 
-                  ? color.withValues(alpha: 0.08)
-                  : Colors.grey.withValues(alpha: 0.05),
+                  ? color.withOpacity(0.08)
+                  : Colors.grey.withOpacity(0.05),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-                color: isActive ? color.withValues(alpha: 0.3) : Colors.grey.withValues(alpha: 0.2),
+                color: isActive ? color.withOpacity(0.3) : Colors.grey.withOpacity(0.2),
           width: 1.5,
         ),
               boxShadow: [
                 BoxShadow(
                   color: isActive 
-                      ? color.withValues(alpha: 0.1)
-                      : Colors.grey.withValues(alpha: 0.05),
+                      ? color.withOpacity(0.1)
+                      : Colors.grey.withOpacity(0.05),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -779,7 +823,7 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
                         child: Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: color.withValues(alpha: 0.15),
+                            color: color.withOpacity(0.15),
                             shape: BoxShape.circle,
                           ),
                   child: Icon(
@@ -795,7 +839,7 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.grey.withValues(alpha: 0.1),
+                      color: Colors.grey.withOpacity(0.1),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
@@ -929,7 +973,7 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: const Text('🎤 Enregistrement audio démarré'),
-        backgroundColor: AppConstants.warningColor,
+        backgroundColor: const Color(0xFFee82ee),
         duration: const Duration(seconds: 3),
       ),
     );
@@ -1011,7 +1055,7 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
         gradient: LinearGradient(
           colors: [
             color,
-            color.withValues(alpha: 0.8),
+            color.withOpacity(0.8),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -1019,7 +1063,7 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: color.withValues(alpha: 0.3),
+            color: color.withOpacity(0.3),
             blurRadius: 15,
             offset: const Offset(0, 6),
           ),
@@ -1064,12 +1108,12 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: AppConstants.errorColor.withValues(alpha: 0.3),
+          color: AppConstants.errorColor.withOpacity(0.3),
           width: 2,
         ),
         boxShadow: [
           BoxShadow(
-            color: AppConstants.errorColor.withValues(alpha: 0.1),
+            color: AppConstants.errorColor.withOpacity(0.1),
             blurRadius: 15,
             offset: const Offset(0, 5),
           ),
@@ -1106,6 +1150,171 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
         ),
       ),
     );
+  }
+
+  /// Boutons "Je suis en sécurité" et "Fausse alerte"
+  Widget _buildSafetyButtons() {
+    return Column(
+      children: [
+        // Je suis en sécurité
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _confirmMarkSafe,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green[600],
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+            child: const Text('JE SUIS EN SÉCURITÉ'),
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Fausse alerte (annulation)
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton(
+            onPressed: _cancelAlert,
+            style: OutlinedButton.styleFrom(
+              side: BorderSide(color: Colors.orange[700]!),
+              foregroundColor: Colors.orange[800],
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+            child: const Text('FAUSSE ALERTE'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Confirme la clôture en sécurité
+  Future<void> _confirmMarkSafe() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        const brandPrimary = Color(0xFF945acb);
+        const brandAccent = Color(0xFFee82ee);
+        return AlertDialog(
+          backgroundColor: brandPrimary,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+          contentPadding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+          actionsPadding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+          title: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const Icon(Icons.verified_user, color: Colors.white),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Confirmer: Je suis en sécurité',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white.withOpacity(0.25)),
+                ),
+                child: const Text(
+                  'Cette action va:\n• Arrêter le tracking GPS\n• Arrêter les enregistrements\n• Clôturer l\'alerte comme "résolue"',
+                  style: TextStyle(color: Colors.white),
+                  softWrap: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: brandAccent.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white.withOpacity(0.25)),
+                ),
+                child: const Text(
+                  'Ne confirmez QUE si vous êtes vraiment en sécurité.',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                  softWrap: true,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            OutlinedButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Colors.white70),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('NON, CONTINUER ALERTE'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: brandAccent,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('OUI, JE SUIS EN SÉCURITÉ'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm == true) {
+      await _markAlertAsSafe();
+    }
+  }
+
+  /// Clôture l'alerte comme "résolue"
+  Future<void> _markAlertAsSafe() async {
+    try {
+      // Arrêter enregistrements
+      try { await EvidenceService.instance.stopEvidenceRecording(); } catch (_) {}
+      try { await AudioRecordingService.instance.stopBackgroundRecording(); } catch (_) {}
+      // Marquer l'alerte résolue
+      if (_alertId != null) {
+        await AlertService.instance.updateAlertStatus(_alertId!, 'resolue');
+      }
+      // Nettoyer les clés locales pour éviter toute redirection retour
+      try {
+        await StorageService.instance.remove(AppConstants.keyCurrentAlertId);
+        if (_alertId != null) {
+          await StorageService.instance.remove('alert_$_alertId');
+        }
+        await StorageService.instance.remove('current_alert');
+        await StorageService.instance.remove('current_alert_should_open');
+      } catch (_) {}
+      // Feedback et retour
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Alerte clôturée: vous êtes en sécurité.'),
+            backgroundColor: const Color(0xFF945acb),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        context.go(AppConstants.routeVictimDashboard);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur de clôture: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   // Actions des boutons
@@ -1151,8 +1360,10 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
                 print('🚨 Alerte annulée par l\'utilisateur: $_alertId');
               }
               
-              // Retour à l'écran précédent
-              Navigator.of(context).pop();
+              // Retour au dashboard
+              if (mounted) {
+                context.go(AppConstants.routeVictimDashboard);
+              }
               
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(

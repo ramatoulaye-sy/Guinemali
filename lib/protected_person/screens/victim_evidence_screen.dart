@@ -41,8 +41,14 @@ class _VictimEvidenceScreenState extends State<VictimEvidenceScreen> {
   @override
   void initState() {
     super.initState();
-    _loadEvidenceList();
-    _getCurrentAlertId();
+    _bootstrap();
+  }
+  Future<void> _bootstrap() async {
+    try {
+      await StorageService.ensureInitialized();
+    } catch (_) {}
+    await _getCurrentAlertId();
+    await _loadEvidenceList();
   }
 
   @override
@@ -223,12 +229,10 @@ class _VictimEvidenceScreenState extends State<VictimEvidenceScreen> {
   Future<void> _loadEvidenceList() async {
     setState(() => _isLoading = true);
     try {
-      // Charger la liste des preuves depuis le service local
-      final evidences = await EvidenceService.instance.getEvidences();
+      // Charger depuis la base locale SQLite (source de vérité)
+      final rows = await StorageService.instance.getLocalEvidence();
       setState(() {
-        _evidenceList = evidences
-            .map((evidence) => EvidenceItem.fromLocalService(evidence))
-            .toList();
+        _evidenceList = rows.map((e) => EvidenceItem.fromLocalService(e)).toList();
       });
     } catch (e) {
       print('Erreur lors du chargement des preuves: $e');

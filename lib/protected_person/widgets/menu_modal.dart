@@ -252,6 +252,7 @@ class _MenuModalState extends State<MenuModal> {
               const Text(
                 'Plan d\'Urgence',
                 style: TextStyle(
+                  color: AppTheme.primaryColor,
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
                 ),
@@ -381,7 +382,6 @@ class _MenuModalState extends State<MenuModal> {
   void _openSettings() {
     print('🔧 Tentative d\'ouverture des paramètres...');
     HapticFeedback.lightImpact();
-    Navigator.of(context).pop();
     print('🔧 Navigation vers: ${AppConstants.routeVictimSettings}');
     try {
       context.push(AppConstants.routeVictimSettings);
@@ -399,31 +399,26 @@ class _MenuModalState extends State<MenuModal> {
 
   void _openEvidence() {
     HapticFeedback.lightImpact();
-    Navigator.of(context).pop();
     context.push(AppConstants.routeVictimEvidence);
   }
 
   void _openSecurity() {
     HapticFeedback.lightImpact();
-    Navigator.of(context).pop();
     context.push(AppConstants.routeVictimSecurity);
   }
 
   void _openPermissions() {
     HapticFeedback.lightImpact();
-    Navigator.of(context).pop();
     context.push(AppConstants.routePermissions);
   }
 
   void _openHistory() {
     HapticFeedback.lightImpact();
-    Navigator.of(context).pop();
     context.push(AppConstants.routeVictimHistory);
   }
 
   void _openONG() {
     HapticFeedback.lightImpact();
-    Navigator.of(context).pop();
     try {
       context.push(AppConstants.routeVictimNGO);
     } catch (e) {
@@ -433,7 +428,6 @@ class _MenuModalState extends State<MenuModal> {
 
   void _openEmergencyPlan() {
     HapticFeedback.lightImpact();
-    Navigator.of(context).pop();
     context.push(AppConstants.routeVictimEmergencyPlan);
   }
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:uuid/uuid.dart';
 import '../constants/app_constants.dart';
 import '../models/alert_model.dart';
@@ -10,7 +12,7 @@ import 'audio_recording_service.dart';
 import 'sync_service.dart';
 import 'realtime_service.dart';
 import 'emergency_contact_service.dart';
-import 'dart:async';
+import '../app/router_refresh.dart';
 
 /// Service de gestion des alertes d'urgence
 class AlertService {
@@ -65,11 +67,24 @@ class AlertService {
       // Stockage local et file de sync non bloquants pour l'UI
       print('🔍 AVANT _saveAlertLocally');
       await _saveAlertLocally(alertData);
+      // Sauvegarde JSON pour le routeur et les écrans (clé 'alert_<id>' et 'current_alert')
+      try {
+        await StorageService.instance.saveString('alert_$alertId', jsonEncode(alertData));
+        await StorageService.instance.saveString('current_alert', jsonEncode(alertData));
+        await StorageService.instance.saveString('current_alert_should_open', '1');
+      } catch (e) {
+        if (AppConstants.enableLogging) {
+          print('⚠️ Erreur sauvegarde JSON alerte: $e');
+        }
+      }
       print('🔍 APRÈS _saveAlertLocally');
       print('🔍 AVANT addToSyncQueue');
       await SyncService.instance.addToSyncQueue('alerte', alertData);
       print('🔍 APRÈS addToSyncQueue');
-      try { await StorageService.instance.saveString(AppConstants.keyCurrentAlertId, alertId); } catch (_) {}
+      try {
+        await StorageService.instance.saveString(AppConstants.keyCurrentAlertId, alertId);
+        RouterRefresh.instance.ping();
+      } catch (_) {}
       print('🔍 APRÈS saveString keyCurrentAlertId');
 
       // Forcer la synchronisation immédiate (bloquante)
@@ -106,7 +121,7 @@ class AlertService {
           try {
             print('🔄 Tentative d\'insertion directe en fallback...');
             await SupabaseService.instance.insert('alertes', alertData);
-            print('✅ Alerte insérée en fallback');
+            print('✅ Alerte insérée via fallback');
           } catch (e2) {
             print('❌ Fallback échoué: $e2');
           }
@@ -277,6 +292,15 @@ class AlertService {
       // Arrêter l'enregistrement audio
       try {
         AudioRecordingService.instance.stopBackgroundRecording();
+      } catch (_) {}
+
+      // Supprimer l'ID d'alerte courant du stockage local
+      try {
+        await StorageService.instance.remove(AppConstants.keyCurrentAlertId);
+        await StorageService.instance.remove('alert_$alertId');
+        await StorageService.instance.remove('current_alert');
+        await StorageService.instance.remove('current_alert_should_open');
+        RouterRefresh.instance.ping();
       } catch (_) {}
 
       if (AppConstants.enableLogging) {
@@ -553,6 +577,7 @@ class AlertService {
       // Supprimer l'ID d'alerte courant du stockage local
       try {
         await StorageService.instance.remove(AppConstants.keyCurrentAlertId);
+        RouterRefresh.instance.ping();
       } catch (_) {}
 
       // Marquer l'alerte comme annulée localement

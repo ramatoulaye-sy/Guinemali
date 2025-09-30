@@ -30,6 +30,7 @@ class EvidenceService {
   /// Initialise le service de preuves
   Future<void> initialize() async {
     try {
+      await StorageService.ensureInitialized();
       // Demander les permissions caméra et micro si nécessaire
       final cameraStatus = await Permission.camera.request();
       final micStatus = await Permission.microphone.request();

@@ -15,6 +15,13 @@ class StorageService {
   Database? _database;
   SharedPreferences? _prefs;
 
+  static bool _initialized = false;
+  static Future<void> ensureInitialized() async {
+    if (!_initialized) {
+      await instance.initialize();
+    }
+  }
+
   /// Notifie l'UI quand un réglage global change (ex: taille de texte)
   final ValueNotifier<int> uiSettingsVersion = ValueNotifier<int>(0);
 
@@ -45,6 +52,7 @@ class StorageService {
       if (AppConstants.enableLogging) {
         print('✅ StorageService initialisé');
       }
+      _initialized = true;
     } catch (e) {
       if (AppConstants.enableLogging) {
         print('❌ Erreur initialisation storage: $e');

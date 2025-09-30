@@ -250,12 +250,32 @@ class _VictimEmergencyPlanScreenState extends State<VictimEmergencyPlanScreen> {
             child: const Icon(Icons.emergency, size: 24),
           ),
           const SizedBox(width: 12),
-          const Text(
-            'Plan d\'Urgence',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.5,
+          const Expanded(
+            child: Text(
+              'Plan d\'Urgence',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const Spacer(),
+          // Badge de statut
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: _isEditing ? AppTheme.warningColor : AppTheme.successColor,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              _isEditing ? 'À compléter' : 'Complet',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ],
@@ -804,13 +824,19 @@ class _VictimEmergencyPlanScreenState extends State<VictimEmergencyPlanScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon, color: Colors.white, size: 20),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+                softWrap: false,
+                textAlign: TextAlign.center,
               ),
             ),
           ],

@@ -1178,14 +1178,21 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
       // 3. Créer l'alerte d'urgence D'ABORD (pour que l'écran la trouve)
       print('🚨 Création de l\'alerte d\'urgence...');
       
-      // Obtenir la position actuelle
-      final position = await GeolocationService.instance.getCurrentPosition();
-      print('✅ Position récupérée: ${position.latitude}, ${position.longitude}');
+  // Obtenir la position actuelle (tolérant GPS OFF)
+      double? lat;
+      double? lon;
+      try {
+        final position = await GeolocationService.instance.getCurrentPosition();
+        lat = position.latitude; lon = position.longitude;
+        print('✅ Position récupérée: $lat, $lon');
+      } catch (e) {
+        print('⚠️ Position indisponible: $e');
+      }
       
       // Créer l'alerte d'urgence
       final alertId = await AlertService.instance.createEmergencyAlert(
-        latitude: position.latitude,
-        longitude: position.longitude,
+        latitude: lat ?? 0,
+        longitude: lon ?? 0,
         type: 'urgence',
         dangerLevel: 5,
         description: 'Alerte SOS déclenchée depuis le dashboard',
@@ -1203,7 +1210,7 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
         return;
       }
       
-      // Navigation avec GoRouter
+      // Navigation avec GoRouter (même sans GPS)
       context.go(AppConstants.routeVictimActiveAlert);
       print('✅ Navigation lancée avec GoRouter');
 
@@ -1905,18 +1912,27 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
 
   /// Affiche la fenêtre modale du menu
   void _showMenuModal() {
+    final previous = _currentFooterIndex;
+    setState(() { _currentFooterIndex = 3; });
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => const MenuModal(),
-    );
+    ).whenComplete(() {
+      if (mounted) {
+        setState(() { _currentFooterIndex = previous == 3 ? 0 : previous; });
+      }
+    });
   }
 
   /// Navigue vers les contacts
   void _navigateToContacts() {
     try {
-      context.push(AppConstants.routeVictimContacts);
+      setState(() { _currentFooterIndex = 1; });
+      context.push(AppConstants.routeVictimContacts).whenComplete(() {
+        if (mounted) setState(() { _currentFooterIndex = 0; });
+      });
       print('👥 Navigation vers les contacts');
     } catch (e) {
       print('❌ Erreur navigation contacts: $e');
@@ -1929,7 +1945,10 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
   /// Navigue vers le forum
   void _navigateToForum() {
     try {
-      context.push(AppConstants.routeVictimForum);
+      setState(() { _currentFooterIndex = 2; });
+      context.push(AppConstants.routeVictimForum).whenComplete(() {
+        if (mounted) setState(() { _currentFooterIndex = 0; });
+      });
       print('💬 Navigation vers le forum');
     } catch (e) {
       print('❌ Erreur navigation forum: $e');
@@ -1941,8 +1960,11 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
 
   void _navigateToResources() {
     try {
-      context.push(AppConstants.routeVictimResources);
-      print('📚 Navigation vers ressources éducatives');
+      setState(() { _currentFooterIndex = 4; });
+      context.push(AppConstants.routeVictimResources).whenComplete(() {
+        if (mounted) setState(() { _currentFooterIndex = 0; });
+      });
+      print('📚 Navigation vers ressources');
     } catch (e) {
       print('❌ Erreur navigation ressources: $e');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1955,11 +1977,10 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
 
   /// Navigue vers l'accueil (reste sur la page actuelle)
   void _navigateToHome() {
-    // On est déjà sur l'accueil, juste mettre à jour l'index
-    setState(() {
-      _currentFooterIndex = 0;
-    });
-    print('🏠 Reste sur l\'accueil (dashboard)');
+    if (_currentFooterIndex != 0) {
+      setState(() { _currentFooterIndex = 0; });
+    }
+    // Déjà sur le dashboard
   }
 
 

@@ -1,9 +1,12 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/security_service.dart';
 import '../constants/app_constants.dart';
+import '../services/storage_service.dart';
+import 'router_refresh.dart';
 import '../../shared/screens/welcome_screen.dart';
 import '../../shared/screens/login_screen.dart';
 import '../../shared/screens/register_screen.dart';
@@ -19,7 +22,6 @@ import '../../protected_person/screens/victim_settings_screen.dart';
 import '../../protected_person/screens/victim_help_screen.dart';
 import '../../protected_person/screens/victim_profile_screen.dart';
 import '../../protected_person/screens/community_forum_screen.dart';
-import '../../protected_person/screens/victim_map_screen.dart';
 import '../../protected_person/screens/victim_resources_screen.dart';
 import '../../protected_person/screens/victim_ngo_screen.dart';
 import '../../protected_person/screens/permissions_page.dart';
@@ -42,7 +44,7 @@ class AppRouter {
       redirect: (context, state) => _handleRedirect(context, state),
 
       // Faire re-évaluer la redirection quand l'état change
-      refreshListenable: authProvider,
+      refreshListenable: Listenable.merge([authProvider, RouterRefresh.instance]),
 
       // Configuration des routes
       routes: _buildRoutes(),
@@ -67,6 +69,39 @@ class AppRouter {
       if (currentRoute == AppConstants.routeVictimActiveAlert) {
         print('✅ Accès autorisé à l\'écran d\'alerte active');
         return null;
+      }
+
+      // Si une alerte active existe ET est réellement active, rediriger vers l'écran d'alerte
+      final activeAlertId = StorageService.instance.getString(AppConstants.keyCurrentAlertId);
+      if (activeAlertId != null && activeAlertId.isNotEmpty) {
+        // Ne rediriger que si un flag temporaire demande l'ouverture de l'écran
+        final shouldOpen = StorageService.instance.getString('current_alert_should_open') == '1';
+        if (!shouldOpen) {
+          // Pas de redirection automatique au démarrage/hot restart
+          return null;
+        }
+        final alertJson = StorageService.instance.getString('alert_$activeAlertId');
+        if (alertJson == null || alertJson.isEmpty) {
+          // Clé orpheline: nettoyer pour éviter les redirections fantômes
+          StorageService.instance.remove(AppConstants.keyCurrentAlertId);
+        } else {
+          try {
+            final Map<String, dynamic> alert = jsonDecode(alertJson);
+            final dynamic status = alert['statut'] ?? alert['status'];
+            if (status == 'active') {
+              if (currentRoute != AppConstants.routeVictimActiveAlert) {
+                print('🚨 Redirection vers alerte active: $activeAlertId');
+                return AppConstants.routeVictimActiveAlert;
+              }
+            } else {
+              // Plus active: nettoyer la clé pour éviter redirections futures
+              StorageService.instance.remove(AppConstants.keyCurrentAlertId);
+            }
+          } catch (e) {
+            // JSON invalide: nettoyer la clé
+            StorageService.instance.remove(AppConstants.keyCurrentAlertId);
+          }
+        }
       }
 
       // Éviter toute redirection quand on est déjà sur une route victime (sauf cas spéciaux)
@@ -125,22 +160,20 @@ class AppRouter {
         return;
       }
       // Afficher le lock screen modale non destructif
-      final ok = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => const Dialog(
-          insetPadding: EdgeInsets.all(24),
-          child: SizedBox(height: 260, child: AppLockScreen()),
-        ),
-      );
-      // Si annulé ou faux, retourner à l'écran de bienvenue
-      if (ok != true && context.mounted) {
-        context.go(AppConstants.routeWelcome);
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const AppLockScreen(),
+        ).then((_) {
+          _lockShown = false;
+        });
+      } else {
+        _lockShown = false;
       }
-    } catch (_) {
-      // En cas d'erreur, ne pas bloquer l'utilisateur
-    } finally {
+    } catch (e) {
       _lockShown = false;
+      print('❌ Erreur AppLock: $e');
     }
   }
 
@@ -216,87 +249,71 @@ class AppRouter {
         builder: (context, state) => const VictimEvidenceScreen(),
       ),
       
-      // Route de l'écran du plan d'urgence
+      // Plan d'urgence
       GoRoute(
         path: AppConstants.routeVictimEmergencyPlan,
         name: 'victim_emergency_plan',
         builder: (context, state) => const VictimEmergencyPlanScreen(),
       ),
-      
-      // Route de l'écran de l'historique
+
       GoRoute(
         path: AppConstants.routeVictimHistory,
         name: 'victim_history',
         builder: (context, state) => const VictimHistoryScreen(),
       ),
-      
-      // Route de l'écran des paramètres
+
       GoRoute(
         path: AppConstants.routeVictimSettings,
         name: 'victim_settings',
         builder: (context, state) => const VictimSettingsScreen(),
       ),
-      
-      // Route de l'écran d'aide
+
       GoRoute(
         path: AppConstants.routeVictimHelp,
         name: 'victim_help',
         builder: (context, state) => const VictimHelpScreen(),
       ),
-      
-      // Route de l'écran du profil
+
       GoRoute(
         path: AppConstants.routeVictimProfile,
         name: 'victim_profile',
         builder: (context, state) => const VictimProfileScreen(),
       ),
-      
-      // Route de l'écran du forum communautaire (nouvelle version)
+
       GoRoute(
         path: AppConstants.routeVictimForum,
         name: 'victim_forum',
         builder: (context, state) => const CommunityForumScreen(),
       ),
 
-      // Route des ressources éducatives
       GoRoute(
         path: AppConstants.routeVictimResources,
         name: 'victim_resources',
         builder: (context, state) => const VictimResourcesScreen(),
       ),
 
-      // Route écran ONG 24/24
       GoRoute(
         path: AppConstants.routeVictimNGO,
         name: 'victim_ngo',
         builder: (context, state) => const VictimNGOScreen(),
       ),
-      
-      // Route de la carte GPS temps réel (OSM)
-      GoRoute(
-        path: AppConstants.routeVictimLiveMap,
-        name: 'victim_live_map',
-        builder: (context, state) => const VictimMapScreen(),
-      ),
-      // Route de la page d'autorisations
+
       GoRoute(
         path: AppConstants.routePermissions,
         name: 'permissions',
         builder: (context, state) => const PermissionsPage(),
       ),
-      
-      // Route de l'écran de sécurité et confidentialité
+
       GoRoute(
         path: AppConstants.routeVictimSecurity,
         name: 'victim_security',
         builder: (context, state) => const VictimSecurityScreen(),
       ),
-      
-      // Route de l'écran d'enregistrement des preuves
+
       GoRoute(
         path: AppConstants.routeVictimRecordEvidence,
         name: 'victim_record_evidence',
-        builder: (context, state) => const VictimEvidenceScreen(), // Redirigé vers l'écran des preuves
+        builder: (context, state) => const VictimEvidenceScreen(),
       ),
     ];
   }
