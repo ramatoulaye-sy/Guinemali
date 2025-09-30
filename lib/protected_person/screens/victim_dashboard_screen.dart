@@ -7,16 +7,13 @@ import '../../core/theme/app_theme.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/services/geolocation_service.dart';
 import '../../core/services/alert_service.dart';
-import '../../core/services/evidence_service.dart';
-import '../../core/services/emergency_contact_service.dart';
 import '../../core/services/storage_service.dart';
 import 'dart:async';
-import 'dart:convert';
 import '../../core/models/user_model.dart';
 import '../widgets/menu_modal.dart';
 import '../../shared/screens/app_lock_screen.dart';
 import '../../core/services/security_service.dart';
-import '../../core/services/local_push_service.dart';
+import '../../core/services/audio_recording_service.dart';
 
 /// Écran d'accueil principal avec dashboard complet
 class VictimDashboardScreen extends StatefulWidget {
@@ -74,8 +71,17 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
   Future<void> _checkPermissions() async {
     // Vérifier les permissions GPS et audio
     await GeolocationService.instance.checkPermissions();
-    // TODO: Implémenter checkPermissions pour AudioRecordingService
-    // await AudioRecordingService.instance.checkPermissions();
+    // Audio: rendre tolérant si plugin non disponible
+    try {
+      // ignore: unawaited_futures
+      AudioRecordingService.instance.initialize();
+    } catch (e) {
+      if (mounted) {
+        if (AppConstants.enableLogging) {
+          debugPrint('⚠️ Permissions audio non disponibles: $e');
+        }
+      }
+    }
     
     // Démarrer l'animation du bouton Actions Rapides
     Future.delayed(const Duration(milliseconds: 500), () {
@@ -490,88 +496,7 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
     );
   }
 
-  /// Construit une icône de statut (version normale)
-  Widget _buildStatusIcon({
-    required IconData icon,
-    required bool isActive,
-    required String label,
-    required Color color,
-    VoidCallback? onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: isActive 
-              ? Colors.white.withOpacity(0.25)
-              : Colors.white.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isActive 
-                ? Colors.white.withOpacity(0.5)
-                : Colors.white.withOpacity(0.3),
-            width: 1.2,
-          ),
-          boxShadow: onTap != null ? [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 3,
-              offset: const Offset(0, 1),
-            ),
-          ] : null,
-        ),
-        child: Icon(
-          icon,
-          size: 18,
-          color: isActive 
-              ? color
-              : Colors.white.withOpacity(0.7),
-        ),
-      ),
-    );
-  }
-
-  /// Construit une petite icône de statut pour le header (en haut à droite)
-  Widget _buildSmallStatusIcon({
-    required IconData icon,
-    required bool isActive,
-    required Color color,
-    VoidCallback? onTap,
-  }) {
-    return GestureDetector(
-      onTap: () {
-        print('🎯 Clic détecté sur icône: $icon');
-        if (onTap != null) {
-          onTap();
-        }
-      },
-      child: Container(
-        width: 32, // Agrandi pour être cliquable
-        height: 32, // Agrandi pour être cliquable
-        padding: const EdgeInsets.all(4), // Padding pour zone de clic plus grande
-        decoration: BoxDecoration(
-          color: isActive 
-              ? Colors.white.withOpacity(0.2)
-              : Colors.white.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(8), // Plus arrondi
-          border: Border.all(
-            color: isActive 
-                ? Colors.white.withOpacity(0.4)
-                : Colors.white.withOpacity(0.2),
-            width: 1, // Légèrement plus épais
-          ),
-        ),
-        child: Icon(
-          icon,
-          size: 16, // Légèrement plus grand pour être visible
-          color: isActive 
-              ? color
-              : Colors.white.withOpacity(0.7),
-        ),
-      ),
-    );
-  }
+  // helpers retirés (non utilisés)
   
   /// Affiche le statut de la connectivité réseau
   void _showNetworkStatus() {
@@ -1263,10 +1188,10 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.1),
+                  color: Colors.red.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: Colors.red.withValues(alpha: 0.3),
+                    color: Colors.red.withOpacity(0.3),
                     width: 1,
                   ),
                 ),
@@ -1422,104 +1347,13 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
     ) ?? false;
   }
 
-  /// Démarre l'enregistrement discret automatique
-  Future<void> _startDiscreteRecording(String alertId) async {
-    try {
-      // Démarrer l'enregistrement audio discret
-      await EvidenceService.instance.startAudioRecording(alertId);
-      
-      // Démarrer l'enregistrement vidéo discret (si disponible)
-      try {
-        await EvidenceService.instance.startVideoRecording(alertId);
-      } catch (e) {
-        print('⚠️ Enregistrement vidéo non disponible: $e');
-      }
+  // log discret retiré (non utilisé)
 
-      // Enregistrer l'événement dans le service local
-      await _logDiscreteRecordingEvent(alertId);
+  // envoi communauté retiré (non utilisé)
 
-      print('🎤 Enregistrement discret démarré pour l\'alerte: $alertId');
-      // Notification enregistr.
-      LocalPushService.instance.showPersistent(
-        id: 1002,
-        title: 'Enregistrement en cours',
-        body: 'Preuve audio/vidéo en cours...',
-      );
-    } catch (e) {
-      print('❌ Erreur lors du démarrage de l\'enregistrement: $e');
-    }
-  }
+  // notification locale retirée (non utilisée)
 
-  /// Enregistre l'événement d'enregistrement discret
-  Future<void> _logDiscreteRecordingEvent(String alertId) async {
-    try {
-      final event = {
-        'alertId': alertId,
-        'type': 'discrete_recording_started',
-        'timestamp': DateTime.now().toIso8601String(),
-        'status': 'active',
-      };
-      
-      await StorageService.instance.saveString('discrete_recording_$alertId', jsonEncode(event));
-    } catch (e) {
-      print('❌ Erreur lors de l\'enregistrement de l\'événement: $e');
-    }
-  }
-
-  /// Envoie l'alerte à la communauté locale
-  Future<void> _sendCommunityAlert(double latitude, double longitude, String alertId) async {
-    try {
-      // TODO: Implémenter l'envoi à la communauté locale
-      // Pour l'instant, on simule l'envoi
-      print('🌍 Envoi de l\'alerte à la communauté locale...');
-      print('📍 Position: $latitude, $longitude');
-      print('🔗 Lien vers l\'enregistrement: /evidence/$alertId');
-      
-      // Simuler un délai d'envoi
-      await Future.delayed(const Duration(seconds: 1));
-      
-      print('✅ Alerte envoyée à la communauté locale');
-    } catch (e) {
-      print('❌ Erreur lors de l\'envoi à la communauté: $e');
-    }
-  }
-
-  /// Notifie les contacts d'urgence (version locale)
-  Future<void> _notifyEmergencyContactsLocal(String alertId, dynamic position) async {
-    try {
-      print('📞 Notification des contacts d\'urgence...');
-      
-      // Récupérer le message personnalisé
-      final customMessage = StorageService.instance.getString('custom_sos_message');
-      print('📖 Lecture: custom_sos_message = "$customMessage"');
-      
-      // Utiliser EmergencyContactService pour envoyer les SMS
-      await EmergencyContactService.instance.callAllContactsWithFallback(
-        customMessage: customMessage,
-      );
-      
-      print('✅ Contacts d\'urgence notifiés localement');
-    } catch (e) {
-      print('❌ Erreur lors de la notification des contacts: $e');
-    }
-  }
-
-  /// Démarre le suivi GPS continu
-  Future<void> _startContinuousGPSTracking(String alertId, dynamic position) async {
-    try {
-      print('📍 Démarrage du suivi GPS continu...');
-      
-      // Simuler le suivi GPS continu
-      Timer.periodic(const Duration(seconds: 10), (timer) {
-        print('📍 Suivi GPS actif - Alerte: $alertId');
-        // TODO: Implémenter la vraie logique de suivi GPS
-      });
-      
-      print('✅ Suivi GPS continu démarré');
-    } catch (e) {
-      print('❌ Erreur lors du démarrage du suivi GPS: $e');
-    }
-  }
+  // suivi GPS continu retiré (non utilisé)
 
   /// Construit un élément d'action avec icône et texte
   Widget _buildActionItem(IconData icon, String text, Color color) {
@@ -1528,13 +1362,17 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
         Container(
           padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
+            color: color.withOpacity(0.1),
             shape: BoxShape.circle,
           ),
-          child: Icon(
-            icon,
-            color: color,
-            size: 16,
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                color: color,
+                size: 16,
+              ),
+            ],
           ),
         ),
         const SizedBox(width: 12),
@@ -1553,178 +1391,11 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
     );
   }
 
-  /// Affiche le succès avec option d'annulation
-  void _showEmergencySuccessWithCancel(String alertId) {
-    // Afficher le message de succès
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle, color: Colors.white),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                '🚨 ALERTE CRÉÉE ! ID: ${alertId.substring(0, 8)}...\n'
-                'Vous avez 3 secondes pour annuler avec le code secret',
-                style: const TextStyle(fontSize: 14),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: Colors.green,
-        duration: const Duration(seconds: 5),
-        action: SnackBarAction(
-          label: 'ANNULER',
-          textColor: Colors.white,
-          backgroundColor: Colors.red,
-          onPressed: () => _showCancelEmergencyDialog(alertId),
-        ),
-      ),
-    );
+  // snackbar succès retiré (non utilisée)
 
-    // Démarrer le compte à rebours pour l'annulation
-    _startCancelCountdown(alertId);
-  }
+  // countdown retiré (non utilisé)
 
-  /// Démarre le compte à rebours pour l'annulation
-  void _startCancelCountdown(String alertId) {
-    Timer(const Duration(seconds: 3), () {
-      if (mounted) {
-        // Le compte à rebours est terminé - l'utilisateur est déjà sur l'écran d'alerte
-        print('⏰ Compte à rebours d\'annulation terminé pour l\'alerte: $alertId');
-      }
-    });
-  }
-
-  /// Affiche le dialogue d'annulation d'urgence
-  Future<void> _showCancelEmergencyDialog(String alertId) async {
-    final codeController = TextEditingController();
-    
-    final result = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.orange.shade50,
-        title: Row(
-          children: [
-            Icon(Icons.security, color: Colors.orange.shade700, size: 28),
-            const SizedBox(width: 12),
-            const Text(
-              '🔐 Annuler l\'Alerte',
-              style: TextStyle(
-                color: Colors.orange,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Entrez votre code secret pour annuler l\'alerte d\'urgence :',
-              style: TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: codeController,
-              decoration: const InputDecoration(
-                labelText: 'Code Secret',
-                hintText: 'Ex: 1234',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.lock),
-              ),
-              keyboardType: TextInputType.number,
-              maxLength: 4,
-              obscureText: true,
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              '⚠️ Attention : L\'annulation arrêtera l\'enregistrement et les alertes',
-              style: TextStyle(
-                color: Colors.orange,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Continuer l\'Alerte'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final enteredCode = codeController.text.trim();
-              if (enteredCode == '1234') { // Code secret par défaut
-                Navigator.of(context).pop(true);
-              } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-                    content: Text('❌ Code secret incorrect !'),
-          backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('ANNULER L\'ALERTE'),
-          ),
-        ],
-      ),
-    );
-
-    if (result == true) {
-      await _cancelEmergency(alertId);
-    }
-  }
-
-  /// Annule l'alerte d'urgence
-  Future<void> _cancelEmergency(String alertId) async {
-    try {
-      // Arrêter l'enregistrement
-      try {
-        await EvidenceService.instance.stopAudioRecording();
-        await EvidenceService.instance.stopVideoRecording();
-    } catch (e) {
-        print('⚠️ Erreur lors de l\'arrêt de l\'enregistrement: $e');
-      }
-
-      // Marquer l'alerte comme annulée
-      await AlertService.instance.cancelEmergencyAlert(alertId);
-
-      // Retirer notifications persistantes
-      await LocalPushService.instance.cancel(1001);
-      await LocalPushService.instance.cancel(1002);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Alerte d\'urgence annulée avec succès'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
-
-      print('✅ Alerte d\'urgence annulée: $alertId');
-    } catch (e) {
-      print('❌ Erreur lors de l\'annulation: $e');
-      if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text('Erreur lors de l\'annulation: $e'),
-          backgroundColor: Colors.red,
-            duration: Duration(seconds: 4),
-        ),
-      );
-      }
-    }
-  }
+  // _cancelEmergency supprimé (non utilisé)
 
   /// Construit le bouton Actions Rapides
   Widget _buildQuickActionsButton() {
@@ -1853,7 +1524,7 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
         ),
         decoration: BoxDecoration(
           color: isSelected 
-              ? AppTheme.primaryColor.withOpacity(0.1)
+              ? const Color(0xFF945acb).withOpacity(0.12)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
         ),
@@ -1864,7 +1535,7 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
             icon,
             size: 24,
               color: isSelected 
-                  ? AppTheme.primaryColor 
+                  ? const Color(0xFFee82ee)
                   : Colors.grey.shade600,
           ),
           const SizedBox(height: 4),
@@ -1873,7 +1544,7 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
             style: TextStyle(
               fontSize: 12,
                 color: isSelected 
-                    ? AppTheme.primaryColor 
+                    ? const Color(0xFF945acb)
                     : Colors.grey.shade600,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
             ),
@@ -1900,8 +1571,14 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
   /// Navigation vers la carte GPS temps réel
   void _navigateToRealtimeMap() {
     try {
-      // Utilise la route définie dans AppRouter (victim_live_map)
-      context.push(AppConstants.routeVictimLiveMap);
+      // En cours de développement: afficher un message au lieu de naviguer
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Carte GPS en temps réel – en cours de développement'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 2),
+        ),
+      );
     } catch (e) {
       print('❌ Erreur navigation carte: $e');
       ScaffoldMessenger.of(context).showSnackBar(

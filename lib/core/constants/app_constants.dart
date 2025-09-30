@@ -11,8 +11,8 @@ class AppConstants {
   static const String defaultLanguage = 'fr';
   
   // Mode debug et logging
-  static const bool enableDebugMode = true;
-  static const bool enableLogging = true;
+  static const bool enableDebugMode = false;
+  static const bool enableLogging = false;
   static const bool enableTestMode = false; // MODE NORMAL - Supabase Pro activé
   
   // Routes de navigation

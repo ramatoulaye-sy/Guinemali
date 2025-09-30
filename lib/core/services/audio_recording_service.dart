@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
+import '../constants/app_constants.dart';
 import 'supabase_service.dart';
 
 class AudioRecordingService {
@@ -29,8 +30,15 @@ class AudioRecordingService {
       // Écouter les événements du service Android
       _eventChannel.receiveBroadcastStream().listen(_handleAudioEvent);
       
-      // Vérifier les permissions
-      await _checkPermissions();
+      // Vérifier les permissions (neutralisé pour éviter MissingPluginException si plugin absent)
+      try {
+        await _checkPermissions();
+      } catch (_) {
+        // ignore: avoid_print
+        if (AppConstants.enableLogging) {
+          print('⚠️ checkPermissions audio ignoré (plugin indisponible)');
+        }
+      }
       
       print('✅ Service d\'enregistrement audio initialisé');
     } catch (e) {
@@ -46,10 +54,14 @@ class AudioRecordingService {
         return true;
       }
 
-      // Vérifier les permissions
-      if (!await _checkPermissions()) {
-        print('❌ Permissions audio refusées');
-        return false;
+      // Vérifier les permissions (tolérant en prod si plugin indisponible)
+      try {
+        final ok = await _checkPermissions();
+        if (!ok && AppConstants.enableLogging) {
+          print('❌ Permissions audio refusées');
+        }
+      } catch (_) {
+        // En production sans plugin, continuer silencieusement
       }
 
       // Démarrer le service Android
@@ -71,7 +83,9 @@ class AudioRecordingService {
         return false;
       }
     } catch (e) {
-      print('❌ Erreur lors du démarrage de l\'enregistrement audio: $e');
+      if (AppConstants.enableLogging) {
+        print('❌ Erreur lors du démarrage de l\'enregistrement audio: $e');
+      }
       return false;
     }
   }
@@ -104,7 +118,9 @@ class AudioRecordingService {
         return false;
       }
     } catch (e) {
-      print('❌ Erreur lors de l\'arrêt de l\'enregistrement audio: $e');
+      if (AppConstants.enableLogging) {
+        print('❌ Erreur lors de l\'arrêt de l\'enregistrement audio: $e');
+      }
       return false;
     }
   }
@@ -121,7 +137,9 @@ class AudioRecordingService {
       }
       return false;
     } catch (e) {
-      print('❌ Erreur lors de la pause de l\'enregistrement: $e');
+      if (AppConstants.enableLogging) {
+        print('❌ Erreur lors de la pause de l\'enregistrement: $e');
+      }
       return false;
     }
   }
@@ -138,7 +156,9 @@ class AudioRecordingService {
       }
       return false;
     } catch (e) {
-      print('❌ Erreur lors de la reprise de l\'enregistrement: $e');
+      if (AppConstants.enableLogging) {
+        print('❌ Erreur lors de la reprise de l\'enregistrement: $e');
+      }
       return false;
     }
   }
@@ -149,7 +169,10 @@ class AudioRecordingService {
       final result = await _channel.invokeMethod('checkPermissions');
       return result == true;
     } catch (e) {
-      print('❌ Erreur lors de la vérification des permissions: $e');
+      // Tolérer l'absence de plugin en production
+      if (AppConstants.enableLogging) {
+        print('❌ Erreur lors de la vérification des permissions: $e');
+      }
       return false;
     }
   }
