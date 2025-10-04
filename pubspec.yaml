@@ -116,20 +116,20 @@ dev_dependencies:
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
-  image_path: "assets/images/logo.png"
+  image_path: "assets/images/logoGuinemali.jpeg"
   min_sdk_android: 21 # android min sdk min:16, default 21
   web:
     generate: true
-    image_path: "assets/images/logo.png"
-    background_color: "#hexcode"
-    theme_color: "#hexcode"
+    image_path: "assets/images/logoGuinemali.jpeg"
+    background_color: "#945acb"
+    theme_color: "#ee82ee"
   windows:
     generate: true
-    image_path: "assets/images/logo.png"
+    image_path: "assets/images/logoGuinemali.jpeg"
     icon_size: 48 # min:48, max:256, default: 48
   macos:
     generate: true
-    image_path: "assets/images/logo.png"
+    image_path: "assets/images/logoGuinemali.jpeg"
 
 
 
@@ -150,6 +150,7 @@ flutter:
 
   # Configuration gen_l10n
   generate: true
+
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
