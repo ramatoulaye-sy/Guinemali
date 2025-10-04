@@ -266,7 +266,7 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
                 ),
                 child: ClipOval(
                   child: Image.asset(
-                    'assets/images/logo.png',
+                    AppConstants.logoPath,
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) {
                       return Icon(
