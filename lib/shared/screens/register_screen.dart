@@ -696,9 +696,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
           );
 
-          // Redirection vers l'écran approprié (dashboard victime)
+          // Attendre un court délai pour que l'AuthProvider se mette à jour
+          await Future.delayed(const Duration(milliseconds: 500));
+          
+          // Forcer la redirection vers le dashboard
           if (mounted) {
-            context.go(AppConstants.routeVictimDashboard);
+            // Utiliser pushReplacement pour éviter le retour à l'écran d'inscription
+            context.pushReplacement(AppConstants.routeVictimDashboard);
           }
         }
       } else {
