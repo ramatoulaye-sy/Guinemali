@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'firebase_options.dart';
 import 'core/app/app_builder.dart';
+import 'core/services/fcm_service.dart';
 
 /// Point d'entrée principal de l'application Guinèmali
 void main() async {
@@ -8,8 +12,24 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   try {
+    // Initialiser Firebase (vérifier si déjà initialisé pour éviter les erreurs au Hot Restart)
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      print('✅ Firebase initialisé');
+    } else {
+      print('ℹ️ Firebase déjà initialisé');
+    }
+    
+    // Configurer le handler de messages en arrière-plan
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    
     // Initialiser les services de l'application
     await AppBuilder.initializeServices();
+    
+    // Initialiser FCM (après les autres services pour avoir l'utilisateur)
+    await FCMService.instance.initialize();
     
     // Lancer l'application
     runApp(AppBuilder.buildApp());
