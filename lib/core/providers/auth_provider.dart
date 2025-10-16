@@ -127,11 +127,22 @@ class AuthProvider extends ChangeNotifier {
       );
       final user = await _authService.register(registrationData);
       
+      // ✅ CORRECTION : S'assurer que _currentUser est bien défini
       _currentUser = user;
+      
+      if (AppConstants.enableLogging) {
+        print('✅ Utilisateur enregistré dans AuthProvider: ${user.prenom}');
+        print('✅ ID utilisateur: ${user.id}');
+        print('✅ Type utilisateur: ${user.typeUtilisateur.value}');
+      }
+      
       _clearError();
       notifyListeners();
       return true;
     } catch (e) {
+      if (AppConstants.enableLogging) {
+        print('❌ Erreur inscription dans AuthProvider: $e');
+      }
       _setError('Erreur d\'inscription: $e');
       return false;
     } finally {

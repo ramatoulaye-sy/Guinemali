@@ -3,8 +3,9 @@ import 'package:crypto/crypto.dart';
 import 'dart:convert';
 import 'package:uuid/uuid.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:gotrue/gotrue.dart' as gotrue;
 import '../models/user_model.dart';
-import '../models/auth_models.dart';
+import '../models/auth_models.dart' as auth_models;
 import '../constants/app_constants.dart';
 import 'supabase_service.dart';
 import 'storage_service.dart';
@@ -174,7 +175,7 @@ class AuthService {
 
 
   /// Inscription d'un nouvel utilisateur
-  Future<UserModel> register(RegistrationData registrationData) async {
+  Future<UserModel> register(auth_models.RegistrationData registrationData) async {
     try {
       print(' === DÉBUT DE L\'INSCRIPTION ===');
       print(' Données reçues: ${registrationData.toJson()}');
@@ -209,14 +210,88 @@ class AuthService {
       final synthesizedEmail = '${registrationData.pseudo}@gmail.com';
       final synthesizedPassword = '${registrationData.pin}_${registrationData.pseudo}';
       print('🔐 Création compte Auth pour: $synthesizedEmail');
-      final authResponse = await _supabase.signUpWithEmail(
-        email: synthesizedEmail,
-        password: synthesizedPassword,
-        data: {
-          'pseudo': registrationData.pseudo,
-          'type_utilisateur': registrationData.typeUtilisateur == UserType.victime ? 'victime' : 'aidant',
-        },
-      );
+      AuthResponse? authResponse;
+      try {
+        authResponse = await _supabase.signUpWithEmail(
+          email: synthesizedEmail,
+          password: synthesizedPassword,
+          data: {
+            'pseudo': registrationData.pseudo,
+            'type_utilisateur': registrationData.typeUtilisateur == UserType.victime ? 'victime' : 'aidant',
+          },
+        );
+      } catch (e) {
+        print('⚠️ Erreur lors de la création du compte Auth: $e');
+        // Si l'erreur est liée à l'email confirmation, essayer de se connecter directement
+        if (e.toString().contains('confirmation email') || e.toString().contains('unexpected_failure')) {
+          print('🔄 Tentative de connexion directe...');
+          try {
+            final signInResp = await _supabase.signInWithEmail(
+              email: synthesizedEmail,
+              password: synthesizedPassword,
+            );
+            authResponse = gotrue.AuthResponse(
+              user: signInResp.user,
+              session: signInResp.session,
+            );
+          } catch (signInError) {
+            print('⚠️ Connexion directe échouée: $signInError');
+            // Si même la connexion directe échoue, créer l'utilisateur sans Auth
+            print('🔄 Création utilisateur sans Auth Supabase...');
+            final tempUserId = const Uuid().v4();
+            final userData = <String, dynamic>{
+              'id': tempUserId,
+              'pseudo': registrationData.pseudo,
+              'prenom': registrationData.prenom.isNotEmpty ? registrationData.prenom : registrationData.pseudo,
+              'pin_chiffre': _hashPin(registrationData.pin),
+              'type_utilisateur': registrationData.typeUtilisateur == UserType.victime ? 'victime' : 'aidant',
+              'actif': true,
+            };
+            
+            if (registrationData.numTel.isNotEmpty) {
+              userData['num_tel'] = registrationData.numTel;
+            }
+            if (registrationData.langue != null) {
+              userData['langue'] = registrationData.langue;
+            }
+            if (registrationData.region != null) {
+              userData['region'] = registrationData.region;
+            }
+            
+            final result = await _supabase.insert('utilisateurs', userData);
+            if (result == null || result.isEmpty) {
+              throw Exception('Échec de l\'insertion dans la table utilisateurs');
+            }
+            
+            // Créer et retourner le UserModel
+            final user = UserModel(
+              id: result.first['id'],
+              prenom: result.first['prenom'],
+              pseudo: result.first['pseudo'],
+              numTel: result.first['num_tel'] ?? '',
+              langue: result.first['langue'] ?? 'fr',
+              region: result.first['region'],
+              typeUtilisateur: UserType.fromString(result.first['type_utilisateur']),
+              actif: result.first['actif'] ?? true,
+              dateCreation: DateTime.parse(result.first['date_creation']),
+              derniereConnexion: null,
+              profilComplete: result.first['profil_complete'] ?? false,
+              photoUrl: result.first['photo_url'],
+            );
+            
+            // ✅ CORRECTION : Mettre à jour _currentUser
+            _currentUser = user;
+            
+            // Sauvegarder l'utilisateur localement
+            await _saveUserDataLocally(user);
+            
+            print('✅ Utilisateur créé sans Auth: ${user.prenom}');
+            return user;
+          }
+        } else {
+          rethrow;
+        }
+      }
       var authUser = authResponse.user;
       // Si l'email n'est pas auto-confirmé, il se peut que la session soit nulle ici
       if (authResponse.session == null || authUser == null) {
@@ -267,16 +342,32 @@ class AuthService {
       
       print('✅ Utilisateur inséré dans la table: ${result.first['id']}');
       
-      // Créer et retourner le UserModel
+      // Créer et retourner le UserModel COMPLET
       final user = UserModel(
         id: result.first['id'],
         prenom: result.first['prenom'],
         pseudo: result.first['pseudo'],
-        typeUtilisateur: result.first['type_utilisateur'] == 'victime' ? UserType.victime : UserType.aidant,
-        dateCreation: DateTime.now(),
+        numTel: result.first['num_tel'] ?? '',
+        langue: result.first['langue'] ?? 'fr',
+        region: result.first['region'],
+        typeUtilisateur: UserType.fromString(result.first['type_utilisateur']),
+        actif: result.first['actif'] ?? true,
+        dateCreation: result.first['date_creation'] != null 
+          ? DateTime.parse(result.first['date_creation']) 
+          : DateTime.now(),
+        derniereConnexion: null,
+        profilComplete: result.first['profil_complete'] ?? false,
+        photoUrl: result.first['photo_url'],
       );
       
+      // ✅ CORRECTION : Mettre à jour _currentUser
+      _currentUser = user;
+      
+      // Sauvegarder l'utilisateur localement
+      await _saveUserDataLocally(user);
+      
       print('✅ Inscription réussie pour: ${user.prenom}');
+      print('✅ _currentUser défini: ${_currentUser?.prenom}');
       return user;
       
     } catch (e) {
@@ -309,7 +400,7 @@ class AuthService {
   }
 
   /// Connexion d'un utilisateur existant
-  Future<UserModel> login(LoginData loginData) async {
+  Future<UserModel> login(auth_models.LoginData loginData) async {
     try {
       print('🔐 === DÉBUT DE LA CONNEXION ===');
       // Normaliser le pseudo
