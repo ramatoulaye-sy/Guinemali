@@ -77,12 +77,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
       padding: const EdgeInsets.all(AppConstants.paddingLarge),
       child: Form(
         key: _formKey,
-        child: Column(
-          children: [
-            // Logo et slogan
-            _buildLogoHeader(theme),
+      child: Column(
+                children: [
+                  // Logo et slogan
+                  _buildLogoHeader(theme),
 
-            const SizedBox(height: AppConstants.paddingLarge),
+                  const SizedBox(height: AppConstants.paddingLarge),
 
             // En-tête
             _buildStepHeader(
@@ -124,7 +124,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   /// Construit les conditions d'utilisation
   Widget _buildTermsAndConditions(ThemeData theme) {
     return Row(
-      children: [
+              children: [
         Checkbox(
           value: _acceptTerms,
           onChanged: (value) {
@@ -145,7 +145,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             width: 2,
           ),
         ),
-        Expanded(
+                Expanded(
           child: GestureDetector(
             onTap: () {
               setState(() {
@@ -175,10 +175,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       decoration: TextDecoration.underline,
                       fontWeight: FontWeight.w600,
                     ),
-                  ),
-                ],
-              ),
             ),
+          ],
+        ),
+      ),
           ),
         ),
       ],
@@ -224,7 +224,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget _buildLoginLink(ThemeData theme) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
-      children: [
+            children: [
         Text(
           'Déjà un compte ? ',
           style: theme.textTheme.bodyMedium?.copyWith(
@@ -317,8 +317,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
           textAlign: TextAlign.center,
         ),
       ],
-    )
-        .animate()
+        )
+            .animate()
         .fadeIn(delay: AppConstants.animationDurationFast)
         .slideY(begin: -0.3, end: 0);
   }
@@ -355,25 +355,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
         borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
         border: Border.all(color: AppConstants.errorColor.withOpacity(0.3)),
       ),
-      child: Row(
-        children: [
+            child: Row(
+              children: [
           Icon(
             Icons.error_outline,
             color: AppConstants.errorColor,
             size: AppConstants.iconSizeMedium,
           ),
           const SizedBox(width: AppConstants.paddingSmall),
-          Expanded(
+                Expanded(
             child: Text(
               _errorMessage!,
               style: TextStyle(
                 color: AppConstants.errorColor,
                 fontSize: AppConstants.fontSizeMedium,
               ),
-            ),
-          ),
-        ],
-      ),
+                        ),
+                      ),
+                    ],
+                  ),
     );
   }
 
@@ -460,7 +460,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
         // Prénom
         TextFormField(
-          controller: _prenomController,
+                          controller: _prenomController,
           decoration: InputDecoration(
             labelText: 'Prénom *',
             hintText: 'Entrez votre prénom',
@@ -594,16 +594,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
               child: Text(
                 'Français',
                 style: TextStyle(color: AppConstants.primaryColor),
-              ),
+            ),
             ),
             DropdownMenuItem(
               value: 'en',
-              child: Text(
+            child: Text(
                 'English',
                 style: TextStyle(color: AppConstants.primaryColor),
-              ),
             ),
-          ],
+          ),
+        ],
           onChanged: (value) {
             setState(() {
               _selectedLanguage = value!;
@@ -611,7 +611,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           },
         ),
 
-        const SizedBox(height: AppConstants.paddingMedium),
+            const SizedBox(height: AppConstants.paddingMedium),
 
         // Région (optionnel)
         DropdownButtonFormField<String?>(
@@ -628,7 +628,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           items: [
             DropdownMenuItem<String?>(
               value: null,
-              child: Text(
+            child: Text(
                 'Non spécifié',
                 style: TextStyle(color: AppConstants.primaryColor),
               ),
@@ -636,14 +636,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ...AppConstants.guineanRegions.map((region) => 
               DropdownMenuItem(
                 value: region,
-                child: Text(
+            child: Text(
                   region,
                   style: TextStyle(color: AppConstants.primaryColor),
                 ),
               )
             ),
           ],
-          onChanged: (value) {
+              onChanged: (value) {
             setState(() {
               _selectedRegion = value;
             });
@@ -666,7 +666,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    setState(() {
+      setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
@@ -688,46 +688,47 @@ class _RegisterScreenState extends State<RegisterScreen> {
         final user = context.read<AuthProvider>().currentUser;
         if (user != null && mounted) {
           // Afficher un message de succès
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
               content: Text('Bienvenue ${user.prenom} !'),
-              backgroundColor: AppConstants.successColor,
+                backgroundColor: AppConstants.successColor,
               duration: const Duration(seconds: 2),
-            ),
-          );
+              ),
+            );
 
-          // Attendre un court délai pour que l'AuthProvider se mette à jour
-          await Future.delayed(const Duration(milliseconds: 500));
-          
-          // Forcer la redirection vers le dashboard
+          // Redirection immédiate vers le dashboard sans délai
           if (mounted) {
             // Utiliser pushReplacement pour éviter le retour à l'écran d'inscription
             context.pushReplacement(AppConstants.routeVictimDashboard);
           }
         }
       } else {
+        if (mounted) {
         setState(() {
-          _errorMessage = 'Erreur lors de l\'inscription. Veuillez réessayer.';
+            _errorMessage = 'Erreur lors de l\'inscription. Veuillez réessayer.';
         });
+        }
       }
     } catch (e) {
+      if (mounted) {
       setState(() {
-        _errorMessage = 'Erreur: ${e.toString()}';
+          _errorMessage = 'Erreur: ${e.toString()}';
       });
+      }
     } finally {
       if (mounted) {
-        setState(() {
+      setState(() {
           _isLoading = false;
-        });
-      }
+      });
     }
+  }
   }
 
   /// Vérifie la disponibilité du pseudo
   Future<void> _checkPseudoAvailability() async {
     final pseudo = _pseudoController.text.trim().toLowerCase();
     if (pseudo.isEmpty) return;
-
+    
     setState(() {
       _isCheckingPseudo = true;
     });
@@ -735,7 +736,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     try {
       // Vérifier la disponibilité du pseudo via une requête directe
       final response = await SupabaseService.instance.select(
-        'utilisateurs',
+          'utilisateurs',
         filters: {'pseudo': pseudo},
       );
       
@@ -753,28 +754,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _pseudoValidated = isAvailable;
         if (!isAvailable) {
           _errorMessage = 'Ce pseudo est déjà utilisé';
-        } else {
+          } else {
           _errorMessage = null; // Clear previous error message
         }
       });
       
       if (AppConstants.enableLogging) {
         print('✅ Pseudo "$pseudo" ${isAvailable ? "disponible" : "non disponible"}');
-      }
-    } catch (e) {
+        }
+      } catch (e) {
       if (AppConstants.enableLogging) {
         print('❌ Erreur vérification pseudo: $e');
       }
-      setState(() {
+        setState(() {
         _pseudoValidated = false;
         _errorMessage = 'Erreur lors de la vérification du pseudo';
       });
     } finally {
-      setState(() {
+        setState(() {
         _isCheckingPseudo = false;
-      });
+        });
+      }
     }
-  }
 
   /// Valide le pseudo
   String? _validatePseudo(String? value) {

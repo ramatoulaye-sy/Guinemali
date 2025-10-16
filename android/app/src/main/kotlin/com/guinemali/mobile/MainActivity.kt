@@ -1,4 +1,4 @@
-package com.example.guinemali
+package com.guinemali.mobile
 
 import android.content.ComponentName
 import android.content.pm.PackageManager

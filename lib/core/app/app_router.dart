@@ -26,6 +26,7 @@ import '../../protected_person/screens/victim_resources_screen.dart';
 import '../../protected_person/screens/victim_ngo_screen.dart';
 import '../../protected_person/screens/permissions_page.dart';
 import '../../protected_person/screens/victim_security_screen.dart';
+import '../../protected_person/screens/victim_map_screen.dart';
 import '../../shared/screens/app_lock_screen.dart';
 import '../test_rpc_functions.dart';
 
@@ -314,6 +315,13 @@ class AppRouter {
         path: AppConstants.routeVictimRecordEvidence,
         name: 'victim_record_evidence',
         builder: (context, state) => const VictimEvidenceScreen(),
+      ),
+
+      // Route de la carte GPS en temps réel
+      GoRoute(
+        path: AppConstants.routeVictimLiveMap,
+        name: 'victim_live_map',
+        builder: (context, state) => const VictimMapScreen(),
       ),
     ];
   }

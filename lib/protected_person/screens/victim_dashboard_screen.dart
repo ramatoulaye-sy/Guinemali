@@ -1571,18 +1571,17 @@ class _VictimDashboardScreenState extends State<VictimDashboardScreen>
   /// Navigation vers la carte GPS temps réel
   void _navigateToRealtimeMap() {
     try {
-      // En cours de développement: afficher un message au lieu de naviguer
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Carte GPS en temps réel – en cours de développement'),
-          backgroundColor: Colors.orange,
-          duration: Duration(seconds: 2),
-        ),
-      );
+      context.push(AppConstants.routeVictimLiveMap);
+      if (AppConstants.enableLogging) {
+        print('🗺️ Navigation vers la carte GPS en temps réel');
+      }
     } catch (e) {
       print('❌ Erreur navigation carte: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur navigation: $e')),
+        SnackBar(
+          content: Text('Erreur navigation: $e'),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }

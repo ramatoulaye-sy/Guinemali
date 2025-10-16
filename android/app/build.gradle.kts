@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.guinemali.app"
+    namespace = "com.guinemali.mobile"
     compileSdk = 36  // Requis par certains plugins (camera_android, media3, etc.)
 
     compileOptions {
@@ -37,7 +37,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.guinemali.app"
+        applicationId = "com.guinemali.mobile"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 23  // Mettre à jour vers 23 pour record_android

@@ -1089,7 +1089,7 @@ class _AnonHelpModalState extends State<_AnonHelpModal> {
             const SizedBox(height: 8),
             Row(
               children: [
-          Expanded(
+                Expanded(
                   child: TextField(
                     controller: _text,
                     decoration: const InputDecoration(hintText: 'Écrire...', border: OutlineInputBorder()),
@@ -1180,7 +1180,7 @@ class _CategoriesBar extends StatelessWidget {
                   border: Border.all(color: primary, width: 1),
                   boxShadow: selected ? [BoxShadow(color: primary.withOpacity(0.35), blurRadius: 8, offset: const Offset(0,2))] : null,
       ),
-      child: Row(
+                      child: Row(
         children: [
                     if (icon != null) ...[
                       Icon(icon, size: 18, color: selected ? Colors.white : primary),
@@ -1212,11 +1212,11 @@ class _FeedPlaceholder extends StatelessWidget {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
+                        children: [
+                          Container(
             width: 80,
             height: 80,
-            decoration: BoxDecoration(
+                            decoration: BoxDecoration(
               color: const Color(0xFFee82ee).withOpacity(0.15),
               shape: BoxShape.circle,
             ),
@@ -1232,9 +1232,9 @@ class _FeedPlaceholder extends StatelessWidget {
             'Soyez la première à partager quelque chose !',
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.black54, fontSize: 14),
-          ),
-        ],
-      ),
+                          ),
+                        ],
+                      ),
     );
   }
 }
@@ -1373,11 +1373,11 @@ class _PostCard extends StatelessWidget {
                   child: const Padding(
                     padding: EdgeInsets.all(8),
                     child: Icon(Icons.share_outlined, color: Colors.black54),
-                  ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
-            ),
-            ],
           ),
         ),
       ),
@@ -1550,7 +1550,7 @@ class _MediaGallery extends StatelessWidget {
                     File(m.localPath),
                     width: double.infinity,
                     fit: BoxFit.fitWidth,
-                  ),
+            ),
           ),
         ),
       );
@@ -1644,8 +1644,8 @@ class _CommentsSheetState extends State<_CommentsSheet> {
               if (_replyingTo != null)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Row(
-                    children: [
+      child: Row(
+        children: [
                       Expanded(
                         child: Text('Réponse à ${_replyingTo!.authorName}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: Colors.black54)),
                       ),
@@ -1657,7 +1657,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                 padding: const EdgeInsets.all(12),
                 child: Row(
             children: [
-                    Expanded(
+          Expanded(
                       child: TextField(
                         controller: _text,
                         style: const TextStyle(color: Colors.black87),
@@ -1669,9 +1669,9 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade400)),
                           enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade400)),
                           focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF945acb), width: 1.4)),
-                        ),
-                      ),
-                    ),
+              ),
+            ),
+          ),
                     const SizedBox(width: 8),
                   SizedBox(
                     width: 120,
@@ -1690,7 +1690,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                                 text: content,
                                 parentCommentId: _replyTo,
                               );
-                              setState(() {
+              setState(() {
                                 _sending = false;
                                 _text.clear();
                                 _replyTo = null;
@@ -1851,9 +1851,9 @@ class _CommentTile extends StatelessWidget {
         _CommentAuthorAvatar(authorId: comment.authorId, anonymous: false),
         const SizedBox(width: 8),
         Expanded(
-          child: Column(
+      child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+        children: [
               Text(comment.authorName, style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.black87)),
               const SizedBox(height: 2),
               Text(comment.text, style: const TextStyle(color: Colors.black87, height: 1.35)),
@@ -1978,10 +1978,10 @@ class _ComposerSheetState extends State<_ComposerSheet> with TickerProviderState
                 position: _enterSlide,
                 child: FadeTransition(
                   opacity: _enterFade,
-                  child: Column(
+      child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+        children: [
               // Bande décorative en dégradé pour ancrer l'identité visuelle
               Container(
                 height: 6,
@@ -1993,8 +1993,8 @@ class _ComposerSheetState extends State<_ComposerSheet> with TickerProviderState
                     end: Alignment.centerRight,
                   ),
                 ),
-              ),
-              const SizedBox(height: 12),
+          ),
+          const SizedBox(height: 12),
               Center(
                 child: Container(
                   width: 40,
@@ -2041,9 +2041,9 @@ class _ComposerSheetState extends State<_ComposerSheet> with TickerProviderState
                     label: 'Masquer mon avatar (fil)',
                     selected: _hideAvatarsInFeed,
                     onTap: () => setState(() => _hideAvatarsInFeed = !_hideAvatarsInFeed),
-                  ),
-                ],
-              ),
+          ),
+        ],
+      ),
             ),
             const SizedBox(height: 8),
             Padding(
@@ -2132,7 +2132,7 @@ class _ComposerSheetState extends State<_ComposerSheet> with TickerProviderState
                       foregroundColor: _onViolet,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                     ),
-                    onPressed: () {
+            onPressed: () {
                       _published = true;
                       final payload = _ComposerPayload(
                         category: _category,
@@ -2287,7 +2287,7 @@ class _ComposerSheetState extends State<_ComposerSheet> with TickerProviderState
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+        backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (_) {
         final text = _text.text.trim();
@@ -2314,7 +2314,7 @@ class _ComposerSheetState extends State<_ComposerSheet> with TickerProviderState
                       _MediaPreviewGrid(medias: _medias),
                     const SizedBox(height: 16),
                     Row(
-                      children: [
+            children: [
                         Expanded(
                           child: OutlinedButton(
                             onPressed: () => Navigator.of(context).pop(),
@@ -2325,7 +2325,7 @@ class _ComposerSheetState extends State<_ComposerSheet> with TickerProviderState
                         Expanded(
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF945acb), foregroundColor: Colors.white),
-                            onPressed: () {
+            onPressed: () {
                               final payload = _ComposerPayload(
                                 category: _category,
                                 text: _text.text.trim(),
@@ -2333,7 +2333,7 @@ class _ComposerSheetState extends State<_ComposerSheet> with TickerProviderState
                                 anonymous: _anonymous,
                               );
                               widget.onSubmit(payload);
-                              Navigator.of(context).pop();
+              Navigator.of(context).pop();
                               Navigator.of(context).pop();
                               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Post enregistré (cache)')));
                             },
@@ -2442,7 +2442,7 @@ class _MediaPreviewList extends StatelessWidget {
           final m = medias[i];
           return Stack(
             clipBehavior: Clip.none,
-            children: [
+      children: [
               _MediaTile(media: m),
               Positioned(
                 right: -6,
@@ -2500,9 +2500,9 @@ class _MediaActionButtonState extends State<_MediaActionButton> with SingleTicke
       onTapUp: (_) { _c.reverse(); widget.onTap(); },
       child: ScaleTransition(
         scale: _scale,
-        child: Container(
+                child: Container(
           height: 48,
-        decoration: BoxDecoration(
+                  decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: widget.color, width: 1.2),
             color: Colors.white,
@@ -2517,9 +2517,9 @@ class _MediaActionButtonState extends State<_MediaActionButton> with SingleTicke
               const SizedBox(width: 8),
               Text(widget.label, style: TextStyle(color: widget.color, fontWeight: FontWeight.w600)),
             ],
-          ),
-        ),
-      ),
+                    ),
+                  ),
+                ),
     );
   }
 }
@@ -2752,10 +2752,10 @@ class _AudioPreviewTileState extends State<_AudioPreviewTile> {
             },
           ),
           Expanded(
-            child: Column(
+        child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
+          mainAxisSize: MainAxisSize.min,
+          children: [
                 LinearProgressIndicator(
                   value: (_dur.inMilliseconds == 0 || !_playing) ? 0 : (_pos.inMilliseconds / _dur.inMilliseconds).clamp(0.0, 1.0),
                   backgroundColor: Colors.grey.shade300,
