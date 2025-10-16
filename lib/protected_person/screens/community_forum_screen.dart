@@ -47,9 +47,12 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> with Ticker
     _fabCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
     _fabScale = CurvedAnimation(parent: _fabCtrl, curve: Curves.elasticOut);
     WidgetsBinding.instance.addPostFrameCallback((_) => _fabCtrl.forward());
-    // Précharger la liste (simule un chargement pour afficher les skeletons)
+    // Forcer le rechargement depuis Supabase à chaque ouverture
     () async {
-      try { await _forum.listPosts(); } catch (_) {}
+      try { 
+        await _forum.reload(); // ← FORCE RELOAD depuis Supabase
+        await _forum.listPosts(); 
+      } catch (_) {}
       if (mounted) setState(() { _loadingFeed = false; });
     }();
   }

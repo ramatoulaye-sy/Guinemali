@@ -11,6 +11,7 @@ import '../services/evidence_service.dart';
 import '../services/audio_recording_service.dart';
 import '../services/sync_service.dart';
 import '../services/emergency_contact_service.dart';
+import '../services/fcm_service.dart';
 // removed duplicate StorageService import (already imported at top)
 import 'app_config.dart';
 import '../constants/app_constants.dart';
@@ -346,6 +347,14 @@ class AppBuilder {
       // Initialiser le stockage local pour la persistance de session
       await StorageService.instance.initialize();
       print('✅ StorageService initialisé');
+      
+      // Initialiser Firebase et FCM
+      try {
+        await FCMService.instance.initialize();
+        print('✅ FCMService initialisé');
+      } catch (e) {
+        print('⚠️ FCMService non disponible: $e (l\'app continuera sans notifications push)');
+      }
       
       // Les autres services sont des singletons qui s'initialisent automatiquement
       print('✅ Services initialisés automatiquement');

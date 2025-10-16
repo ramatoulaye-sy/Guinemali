@@ -96,7 +96,7 @@ class GeolocationService {
   }
 
   /// Obtient la position actuelle de l'utilisateur
-  Future<Position> getCurrentPosition() async {
+  Future<Position> getCurrentPosition({bool saveToSupabase = true}) async {
     try {
       // Vérifier les permissions d'abord
       final ok = await checkPermissions();
@@ -118,12 +118,50 @@ class GeolocationService {
         print('✅ Position obtenue: ${position.latitude}, ${position.longitude}');
       }
 
+      // Sauvegarder automatiquement la position dans Supabase pour les notifications de proximité
+      if (saveToSupabase) {
+        _savePositionToSupabase(position.latitude, position.longitude);
+      }
+
       return position;
     } catch (e) {
       if (AppConstants.enableLogging) {
         print('❌ Erreur obtention position: $e');
       }
       rethrow;
+    }
+  }
+
+  /// Sauvegarde la position de l'utilisateur dans Supabase (en arrière-plan)
+  Future<void> _savePositionToSupabase(double latitude, double longitude) async {
+    try {
+      final userId = StorageService.instance.getString(AppConstants.keyUserId);
+      if (userId == null) {
+        return; // Utilisateur non connecté
+      }
+
+      // Appeler la RPC Supabase en arrière-plan (sans attendre)
+      SupabaseService.instance.rpc(
+        'update_user_location',
+        params: {
+          'p_user_id': userId,
+          'p_latitude': latitude,
+          'p_longitude': longitude,
+        },
+      ).then((_) {
+        if (AppConstants.enableLogging) {
+          print('📍 Position sauvegardée dans Supabase: $latitude, $longitude');
+        }
+      }).catchError((e) {
+        if (AppConstants.enableLogging) {
+          print('⚠️ Erreur sauvegarde position: $e');
+        }
+      });
+    } catch (e) {
+      // Ne pas bloquer si la sauvegarde échoue
+      if (AppConstants.enableLogging) {
+        print('⚠️ Erreur sauvegarde position: $e');
+      }
     }
   }
 

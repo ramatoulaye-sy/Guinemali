@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'dart:convert';
 import 'package:camera/camera.dart';
 import 'package:record/record.dart';
@@ -26,6 +27,8 @@ class EvidenceService {
   String? _currentAlertId;
   String? _currentAudioPath;
   String? _currentVideoPath;
+  Timer? _photoTimer; // Timer pour prendre des photos périodiques
+  final List<String> _photoPaths = []; // Liste des photos prises
 
   /// Initialise le service de preuves
   Future<void> initialize() async {
@@ -76,6 +79,7 @@ class EvidenceService {
     }
 
     _currentAlertId = alertId;
+    _photoPaths.clear(); // Réinitialiser la liste des photos
 
     try {
       // Démarrer l'enregistrement audio en arrière-plan
@@ -85,6 +89,9 @@ class EvidenceService {
       if (_cameraController?.value.isInitialized == true) {
         await _startVideoRecording();
       }
+
+      // Démarrer la prise de photos périodiques (toutes les 10 secondes)
+      _startPeriodicPhotos();
 
       if (AppConstants.enableLogging) {
         print('✅ Enregistrement des preuves démarré pour l\'alerte: $alertId');
@@ -108,6 +115,9 @@ class EvidenceService {
       if (_isRecordingVideo) {
         await _stopVideoRecording();
       }
+
+      // Arrêter le timer de photos
+      _stopPeriodicPhotos();
 
       // Sauvegarder les preuves
       await _saveEvidence();
@@ -380,6 +390,38 @@ class EvidenceService {
           print('✅ Preuve vidéo sauvegardée: $_currentVideoPath');
         }
       }
+
+      // Sauvegarder toutes les photos prises périodiquement
+      for (final photoPath in _photoPaths) {
+        if (File(photoPath).existsSync()) {
+          final photoFile = File(photoPath);
+          final photoSize = await photoFile.length();
+          final evidenceId = _uuid.v4();
+          await StorageService.instance.saveEvidence(
+            id: evidenceId,
+            alertId: _currentAlertId!,
+            type: 'photo',
+            filePath: photoPath,
+            fileSize: photoSize,
+          );
+
+          await SyncService.instance.addToSyncQueue('evidence', {
+            'id': evidenceId,
+            'alert_id': _currentAlertId!,
+            'type': 'photo',
+            'file_path': photoPath,
+            'file_size': photoSize,
+          });
+
+          if (AppConstants.enableLogging) {
+            print('✅ Preuve photo sauvegardée: $photoPath');
+          }
+        }
+      }
+
+      if (_photoPaths.isNotEmpty && AppConstants.enableLogging) {
+        print('✅ ${_photoPaths.length} photos sauvegardées au total');
+      }
     } catch (e) {
       if (AppConstants.enableLogging) {
         print('❌ Erreur sauvegarde preuves: $e');
@@ -452,6 +494,66 @@ class EvidenceService {
     return null;
   }
 
+  /// Démarre la prise de photos périodiques
+  void _startPeriodicPhotos() {
+    // Annuler le timer existant s'il y en a un
+    _photoTimer?.cancel();
+    
+    // Prendre une photo toutes les 10 secondes
+    _photoTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
+      try {
+        if (_currentAlertId != null && _cameraController?.value.isInitialized == true) {
+          final photoPath = await _takePhotoSilent();
+          if (photoPath != null) {
+            _photoPaths.add(photoPath);
+            if (AppConstants.enableLogging) {
+              print('📸 Photo automatique ${_photoPaths.length} prise: $photoPath');
+            }
+          }
+        }
+      } catch (e) {
+        if (AppConstants.enableLogging) {
+          print('⚠️ Erreur photo automatique: $e');
+        }
+      }
+    });
+
+    if (AppConstants.enableLogging) {
+      print('📸 Prise de photos périodiques démarrée (toutes les 10s)');
+    }
+  }
+
+  /// Arrête la prise de photos périodiques
+  void _stopPeriodicPhotos() {
+    _photoTimer?.cancel();
+    _photoTimer = null;
+    if (AppConstants.enableLogging) {
+      print('📸 Prise de photos périodiques arrêtée');
+    }
+  }
+
+  /// Prend une photo silencieusement (sans sauvegarder immédiatement)
+  Future<String?> _takePhotoSilent() async {
+    try {
+      if (_cameraController?.value.isInitialized == true) {
+        final image = await _cameraController!.takePicture();
+        
+        if (image.path.isNotEmpty) {
+          // Déplacer la photo vers documents pour persistance
+          final docs = await getApplicationDocumentsDirectory();
+          final target = '${docs.path}/photo_${_currentAlertId ?? 'manual'}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+          await File(image.path).copy(target);
+          return target;
+        }
+      }
+    } catch (e) {
+      if (AppConstants.enableLogging) {
+        print('❌ Erreur prise de photo silencieuse: $e');
+      }
+    }
+    return null;
+  }
+
   /// Vérifie si l'enregistrement est en cours
   bool get isRecording => _isRecordingAudio || _isRecordingVideo;
 
@@ -468,6 +570,9 @@ class EvidenceService {
       if (_isRecordingVideo) {
         await _stopVideoRecording();
       }
+
+      // Arrêter le timer de photos
+      _stopPeriodicPhotos();
 
       // Libérer la caméra
       await _cameraController?.dispose();
@@ -489,11 +594,18 @@ class EvidenceService {
   /// Récupère les preuves pour une alerte spécifique
   Future<List<Map<String, dynamic>>> getEvidencesForAlert(String alertId) async {
     try {
-      // Pour l'instant, retourner une liste vide
-      // TODO: Implémenter la récupération depuis Supabase
-      return [];
+      // Récupérer les preuves depuis le stockage local
+      final evidence = await StorageService.instance.getEvidenceForAlert(alertId);
+      
+      if (AppConstants.enableLogging) {
+        print('📁 Preuves récupérées pour alerte $alertId: ${evidence.length} éléments');
+      }
+      
+      return evidence;
     } catch (e) {
-      print('❌ Erreur lors de la récupération des preuves: $e');
+      if (AppConstants.enableLogging) {
+        print('❌ Erreur lors de la récupération des preuves: $e');
+      }
       return [];
     }
   }

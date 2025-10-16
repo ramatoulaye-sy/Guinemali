@@ -458,9 +458,9 @@ class _VictimProfileScreenState extends State<VictimProfileScreen> with SingleTi
       setState(() => _isImageLoading = true);
 
       final fileBytes = await file.readAsBytes();
-      final path = 'users/$userId/profile_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final path = '$userId/profile_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final publicUrl = await SupabaseService.instance.uploadFile(
-        bucket: 'profiles',
+        bucket: 'avatars',
         path: path,
         file: fileBytes,
         metadata: {'contentType': 'image/jpeg'},

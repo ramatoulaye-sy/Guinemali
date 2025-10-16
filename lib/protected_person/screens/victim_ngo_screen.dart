@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/services/supabase_service.dart';
 
 class VictimNGOScreen extends StatefulWidget {
   const VictimNGOScreen({super.key});
@@ -14,11 +15,53 @@ class _VictimNGOScreenState extends State<VictimNGOScreen> {
   String _lang = 'fr';
   String _domain = 'Tous';
   bool _openNow = true; // 24/24 par défaut
+  
+  List<Map<String, dynamic>> _ngos = [];
+  bool _isLoading = true;
 
-  final List<Map<String, String>> _ngos = [
-    {'id': 'ngo1', 'name': 'ONG Espoir', 'region': 'Conakry', 'lang': 'fr', 'domain': 'Juridique', 'phone': '+224620000000', 'whatsapp': '+224620000000', 'email': 'contact@espoir.org'},
-    {'id': 'ngo2', 'name': 'ONG Aide', 'region': 'Labe', 'lang': 'fr', 'domain': 'Psychologique', 'phone': '+224621111111', 'whatsapp': '+224621111111', 'email': 'support@aide.org'},
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadNGOs();
+  }
+
+  Future<void> _loadNGOs() async {
+    setState(() => _isLoading = true);
+    try {
+      await SupabaseService.ensureInitialized();
+      
+      // Essayer différentes variantes de noms de colonnes
+      final rows = await SupabaseService.instance.select(
+        'ong',
+        columns: 'id, name, nom_organisation, region, langues, langue, domaine, domaine_intervention, telephone, tel, whatsapp, email, ouvert_24_7, disponible_24_7',
+      ).catchError((e) async {
+        // Si ça échoue, essayer avec toutes les colonnes
+        print('⚠️ Erreur colonnes spécifiques, tentative SELECT *');
+        return await SupabaseService.instance.select('ong');
+      });
+      
+      if (mounted) {
+        setState(() {
+          _ngos = (rows as List).cast<Map<String, dynamic>>();
+          _isLoading = false;
+        });
+        
+        if (_ngos.isNotEmpty) {
+          // Afficher les colonnes disponibles pour debug
+          print('✅ ONG chargées: ${_ngos.length}');
+          print('📋 Colonnes disponibles: ${_ngos.first.keys.toList()}');
+        }
+      }
+    } catch (e) {
+      print('❌ Erreur chargement ONG: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur chargement des ONG: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +80,7 @@ class _VictimNGOScreenState extends State<VictimNGOScreen> {
               children: [
                 Expanded(child: _buildDropdown('Région', _region, AppConstants.guineanRegions, (v) => setState(() => _region = v))),
                 const SizedBox(width: 8),
-                Expanded(child: _buildDropdown('Langue', _lang, const ['fr','en','ff'], (v) => setState(() => _lang = v))),
+                Expanded(child: _buildDropdown('Langue', _lang, const ['fr','en'], (v) => setState(() => _lang = v))),
               ],
             ),
           ),
@@ -53,25 +96,72 @@ class _VictimNGOScreenState extends State<VictimNGOScreen> {
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: ListView.separated(
-              padding: const EdgeInsets.all(12),
-              itemCount: _filtered().length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (_, i) {
-                final ngo = _filtered()[i];
-                return _NGOTile(ngo: ngo);
-              },
-            ),
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator(color: AppConstants.primaryColor))
+                : _filtered().isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
+                            const SizedBox(height: 16),
+                            const Text('Aucune ONG trouvée', style: TextStyle(color: Colors.black54, fontSize: 18)),
+                            const SizedBox(height: 8),
+                            const Text('Essayez de changer les filtres', style: TextStyle(color: Colors.black38)),
+                          ],
+                        ),
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.all(12),
+                        itemCount: _filtered().length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 10),
+                        itemBuilder: (_, i) {
+                          final ngo = _filtered()[i];
+                          return _NGOTile(ngo: ngo);
+                        },
+                      ),
           ),
         ],
       ),
     );
   }
 
-  List<Map<String, String>> _filtered() {
-    var l = _ngos.where((n) => n['region'] == _region && n['lang'] == _lang).toList();
-    if (_domain != 'Tous') l = l.where((n) => n['domain'] == _domain).toList();
-    // _openNow est un placeholder: toutes les ONG listées sont considérées 24/24 dans cette V1
+  List<Map<String, dynamic>> _filtered() {
+    var l = _ngos.where((n) {
+      // Filtrer par région
+      if (n['region'] != _region) return false;
+      
+      // Filtrer par langue (essayer plusieurs variantes de colonnes)
+      final langues = n['langues_supportees'] ?? n['langues'] ?? n['langue'];
+      bool langMatch = false;
+      if (langues is List) {
+        langMatch = langues.contains(_lang);
+      } else if (langues is String) {
+        langMatch = langues.contains(_lang);
+      }
+      // Si pas de langue spécifiée, accepter par défaut
+      if (langues == null) langMatch = true;
+      if (!langMatch) return false;
+      
+      return true;
+    }).toList();
+    
+    // Filtrer par domaine
+    if (_domain != 'Tous') {
+      l = l.where((n) {
+        final domaine = n['domaine_intervention'] ?? n['domaine'];
+        return domaine == _domain;
+      }).toList();
+    }
+    
+    // Filtrer par disponibilité 24/7
+    if (_openNow) {
+      l = l.where((n) {
+        final ouvert = n['ouvert_24_7'] ?? n['disponible_24_7'];
+        return ouvert == true || ouvert == 1 || ouvert == '1';
+      }).toList();
+    }
+    
     return l;
   }
 
@@ -106,11 +196,19 @@ class _VictimNGOScreenState extends State<VictimNGOScreen> {
 }
 
 class _NGOTile extends StatelessWidget {
-  final Map<String, String> ngo;
+  final Map<String, dynamic> ngo;
   const _NGOTile({Key? key, required this.ngo}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    // Gérer plusieurs variantes de noms de colonnes
+    final String nom = ngo['nom'] ?? ngo['name'] ?? ngo['nom_organisation'] ?? 'ONG';
+    final String region = ngo['region'] ?? '';
+    final String domaine = ngo['domaine_intervention'] ?? ngo['domaine'] ?? '';
+    final String telephone = ngo['telephone'] ?? ngo['tel'] ?? '';
+    final String whatsapp = ngo['whatsapp'] ?? telephone;
+    final String email = ngo['email'] ?? '';
+    
     return Card(
       elevation: 2,
       shadowColor: Colors.black12,
@@ -123,16 +221,16 @@ class _NGOTile extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(ngo['name']!, style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.black87)),
+                Text(nom, style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.black87)),
                 const SizedBox(height: 2),
-                Text('${ngo['region']} • ${ngo['lang']} • ${ngo['domain']}', style: const TextStyle(color: Colors.black54)),
+                Text('$region • $domaine', style: const TextStyle(color: Colors.black54, fontSize: 12)),
               ]),
             ),
             Wrap(spacing: 6, children: [
-              _ActionIcon(icon: Icons.call, onTap: () => _launch('tel:${ngo['phone']}')),
-              _ActionIcon(icon: Icons.sms, onTap: () => _launch('sms:${ngo['phone']}')),
-              _ActionIcon(icon: Icons.chat, onTap: () => _launch('https://wa.me/${ngo['whatsapp']?.replaceAll('+', '')}')),
-              _ActionIcon(icon: Icons.email, onTap: () => _launch('mailto:${ngo['email']}')),
+              if (telephone.isNotEmpty) _ActionIcon(icon: Icons.call, onTap: () => _launch('tel:$telephone')),
+              if (telephone.isNotEmpty) _ActionIcon(icon: Icons.sms, onTap: () => _launch('sms:$telephone')),
+              if (whatsapp.isNotEmpty) _ActionIcon(icon: Icons.chat, onTap: () => _launch('https://wa.me/${whatsapp.replaceAll('+', '').replaceAll(' ', '')}')),
+              if (email.isNotEmpty) _ActionIcon(icon: Icons.email, onTap: () => _launch('mailto:$email')),
             ]),
           ],
         ),
@@ -141,9 +239,15 @@ class _NGOTile extends StatelessWidget {
   }
 
   static Future<void> _launch(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    try {
+      final uri = Uri.parse(url);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        print('❌ Impossible de lancer: $url');
+      }
+    } catch (e) {
+      print('❌ Erreur lancement URL: $e');
     }
   }
 }

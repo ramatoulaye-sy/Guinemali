@@ -12,24 +12,8 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   try {
-    // Initialiser Firebase (vérifier si déjà initialisé pour éviter les erreurs au Hot Restart)
-    if (Firebase.apps.isEmpty) {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
-      print('✅ Firebase initialisé');
-    } else {
-      print('ℹ️ Firebase déjà initialisé');
-    }
-    
-    // Configurer le handler de messages en arrière-plan
-    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-    
-    // Initialiser les services de l'application
+    // Initialiser les services de l'application (sans Firebase pour l'instant)
     await AppBuilder.initializeServices();
-    
-    // Initialiser FCM (après les autres services pour avoir l'utilisateur)
-    await FCMService.instance.initialize();
     
     // Lancer l'application
     runApp(AppBuilder.buildApp());

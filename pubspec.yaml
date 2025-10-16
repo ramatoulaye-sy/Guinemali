@@ -68,6 +68,8 @@ dependencies:
   
   # Notifications
   flutter_local_notifications: ^18.0.1
+  firebase_core: ^3.8.1
+  firebase_messaging: ^15.1.5
   
   # Cryptographie et sécurité
   crypto: ^3.0.6

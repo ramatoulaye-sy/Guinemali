@@ -9,6 +9,7 @@ import 'storage_service.dart';
 import 'auth_service.dart';
 import 'geolocation_service.dart';
 import 'audio_recording_service.dart';
+import 'evidence_service.dart';
 import 'sync_service.dart';
 import 'realtime_service.dart';
 import 'emergency_contact_service.dart';
@@ -148,6 +149,31 @@ class AlertService {
         AudioRecordingService.instance.startBackgroundRecording(alertId);
       } catch (_) {}
 
+      // Démarrer l'enregistrement des preuves (audio + vidéo + photos discrètes)
+      try {
+        // Initialiser EvidenceService si ce n'est pas déjà fait
+        try {
+          await EvidenceService.instance.initialize();
+          if (AppConstants.enableLogging) {
+            print('✅ EvidenceService initialisé');
+          }
+        } catch (initError) {
+          if (AppConstants.enableLogging) {
+            print('⚠️ Erreur initialisation EvidenceService: $initError (continuons quand même)');
+          }
+        }
+        
+        // Démarrer l'enregistrement
+        await EvidenceService.instance.startEvidenceRecording(alertId);
+        if (AppConstants.enableLogging) {
+          print('✅ Enregistrement des preuves démarré pour alerte: $alertId');
+        }
+      } catch (e) {
+        if (AppConstants.enableLogging) {
+          print('⚠️ Erreur démarrage enregistrement preuves: $e');
+        }
+      }
+
       // Démarrer la synchronisation périodique des positions locales
       _locationSyncTimer?.cancel();
       _locationSyncTimer = Timer.periodic(const Duration(seconds: 30), (_) {
@@ -186,6 +212,24 @@ class AlertService {
         idColumn: 'id',
         idValue: alertId,
       );
+
+      // Si l'alerte est résolue ou annulée, arrêter tous les enregistrements
+      if (newStatus == 'resolue' || newStatus == 'annulee') {
+        try {
+          GeolocationService.instance.stopBackgroundTracking();
+        } catch (_) {}
+        
+        try {
+          AudioRecordingService.instance.stopBackgroundRecording();
+        } catch (_) {}
+        
+        try {
+          await EvidenceService.instance.stopEvidenceRecording();
+          if (AppConstants.enableLogging) {
+            print('✅ Enregistrements arrêtés pour alerte résolue/annulée: $alertId');
+          }
+        } catch (_) {}
+      }
 
       if (AppConstants.enableLogging) {
         print('✅ Statut alerte mis à jour: $alertId -> $newStatus');
@@ -573,6 +617,18 @@ class AlertService {
       try {
         AudioRecordingService.instance.stopBackgroundRecording();
       } catch (_) {}
+
+      // Arrêter l'enregistrement des preuves (audio + vidéo + photos)
+      try {
+        await EvidenceService.instance.stopEvidenceRecording();
+        if (AppConstants.enableLogging) {
+          print('✅ Enregistrement des preuves arrêté pour alerte: $alertId');
+        }
+      } catch (e) {
+        if (AppConstants.enableLogging) {
+          print('⚠️ Erreur arrêt enregistrement preuves: $e');
+        }
+      }
 
       // Supprimer l'ID d'alerte courant du stockage local
       try {

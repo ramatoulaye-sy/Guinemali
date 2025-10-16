@@ -174,23 +174,27 @@ class CommunityForumService with ChangeNotifier {
 
   List<ForumPost> get posts => List.unmodifiable(_posts);
 
+  /// Forcer le rechargement depuis Supabase
+  Future<void> reload() async {
+    print('🔄 FORCE RELOAD demandé, reset _loaded flag');
+    _loaded = false;
+    await _ensureLoaded();
+  }
+
   Future<void> _ensureLoaded() async {
-    if (_loaded) return;
-    
-    // 1. Charger depuis le cache local d'abord
-    final raw = StorageService.instance.getString(_kPosts);
-    if (raw != null && raw.isNotEmpty) {
-      try {
-        final list = (jsonDecode(raw) as List<dynamic>);
-        _posts = list.map((e) => ForumPost.fromJson(e as Map<String, dynamic>)).toList();
-      } catch (_) {
-        _posts = [];
-      }
+    if (_loaded) {
+      print('ℹ️ Posts déjà chargés (_loaded=true), skip');
+      return;
     }
     
-    // 2. Charger depuis Supabase pour avoir les derniers posts
+    print('🔄 DÉBUT chargement posts forum...');
+    
+    // 1. Essayer de charger DIRECTEMENT depuis Supabase (priorité à la source de vérité)
     try {
+      print('📡 Connexion à Supabase pour charger les posts...');
       await SupabaseService.ensureInitialized();
+      
+      print('📡 Exécution SELECT sur forum_posts...');
       final rows = await SupabaseService.instance.select(
         'forum_posts',
         columns: 'id, author_id, author_name, category, text, medias, created_at, liked_by',
@@ -199,23 +203,49 @@ class CommunityForumService with ChangeNotifier {
         limit: 50, // Charger les 50 derniers posts
       );
       
+      print('📡 SELECT terminé, ${rows.length} rows reçues');
+      
       if (rows.isNotEmpty) {
-        final supabasePosts = rows.map<ForumPost>((row) => ForumPost.fromSupabase(row)).toList();
-        
-        // Fusionner avec les posts locaux (éviter les doublons)
-        final existingIds = _posts.map((p) => p.id).toSet();
-        final newPosts = supabasePosts.where((p) => !existingIds.contains(p.id)).toList();
-        _posts.addAll(newPosts);
+        // REMPLACER complètement le cache par les données de Supabase
+        _posts = rows.map<ForumPost>((row) => ForumPost.fromSupabase(row)).toList();
+        print('✅ ${_posts.length} posts chargés depuis Supabase');
+        print('📋 Auteurs: ${_posts.map((p) => p.authorName).toSet().join(", ")}');
         
         // Sauvegarder le cache mis à jour
         await _persist();
+        print('💾 Cache local mis à jour avec ${_posts.length} posts');
+      } else {
+        print('⚠️ Aucun post trouvé dans Supabase, chargement du cache local...');
+        // Si Supabase est vide, charger le cache local
+        _loadFromCache();
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('❌ Erreur chargement posts Supabase: $e');
-      // Continuer avec le cache local si Supabase échoue
+      print('❌ Stack trace: $stackTrace');
+      // En cas d'erreur, fallback sur le cache local
+      _loadFromCache();
     }
     
     _loaded = true;
+    print('✅ FIN chargement posts forum (_loaded=true)');
+  }
+  
+  /// Charger les posts depuis le cache local (fallback)
+  void _loadFromCache() {
+    final raw = StorageService.instance.getString(_kPosts);
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final list = (jsonDecode(raw) as List<dynamic>);
+        _posts = list.map((e) => ForumPost.fromJson(e as Map<String, dynamic>)).toList();
+        print('✅ ${_posts.length} posts chargés depuis le cache local');
+      } catch (e) {
+        print('❌ Erreur lecture cache local: $e');
+        _posts = [];
+      }
+    } else {
+      print('⚠️ Cache local vide');
+      _posts = [];
+    }
   }
 
   Future<List<ForumPost>> listPosts() async {

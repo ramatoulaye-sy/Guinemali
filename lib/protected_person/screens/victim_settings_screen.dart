@@ -856,9 +856,8 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
                   items: const [
                     DropdownMenuItem(value: 'system', child: Text('Langue du Système')),
                     DropdownMenuItem(value: 'fr', child: Text('Français')),
-                    DropdownMenuItem(value: 'sus', child: Text('Soussou')),
-                    DropdownMenuItem(value: 'ff', child: Text('Peulh')),
-                    DropdownMenuItem(value: 'mlq', child: Text('Malinké')),
+                    DropdownMenuItem(value: 'en', child: Text('English')),
+                    // Langues locales désactivées (non finalisées) : Soussou, Peulh, Malinké
                   ],
                 ),
               ),
@@ -1047,9 +1046,8 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
           },
           items: const [
             DropdownMenuItem(value: 'fr', child: Text('Français')),
-            DropdownMenuItem(value: 'sus', child: Text('Soussou')),
-            DropdownMenuItem(value: 'ff', child: Text('Peulh')),
-            DropdownMenuItem(value: 'mlq', child: Text('Malinké')),
+            DropdownMenuItem(value: 'en', child: Text('English')),
+            // Langues locales désactivées (non finalisées) : Soussou, Peulh, Malinké
           ],
         ),
       ),
@@ -1887,10 +1885,13 @@ class _VictimSettingsScreenState extends State<VictimSettingsScreen> with Single
   // Méthodes utilitaires
   String _getLanguageName(String code) {
     switch (code) {
+      case 'system': return 'Langue du Système';
       case 'fr': return 'Français';
-      case 'sus': return 'Soussou';
-      case 'ff': return 'Peulh';
-      case 'mlq': return 'Malinké';
+      case 'en': return 'English';
+      // Langues locales désactivées (non finalisées)
+      case 'sus': return 'Soussou (non disponible)';
+      case 'ff': return 'Peulh (non disponible)';
+      case 'mlq': return 'Malinké (non disponible)';
       default: return 'Français';
     }
   }

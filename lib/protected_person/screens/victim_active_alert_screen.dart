@@ -235,7 +235,25 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: () async {
+        // ⚠️ IMPORTANT : Arrêter les enregistrements avant de quitter
+        try {
+          if (AppConstants.enableLogging) {
+            print('🛑 Arrêt des enregistrements avant retour au dashboard...');
+          }
+          await EvidenceService.instance.stopEvidenceRecording();
+          if (AppConstants.enableLogging) {
+            print('✅ Enregistrements arrêtés avec succès');
+          }
+        } catch (e) {
+          if (AppConstants.enableLogging) {
+            print('⚠️ Erreur arrêt enregistrements: $e');
+          }
+        }
+        
+        // Nettoyer le flag
         try { await StorageService.instance.remove('current_alert_should_open'); } catch (_) {}
+        
+        // Naviguer vers le dashboard
         if (mounted) {
           context.go(AppConstants.routeVictimDashboard);
         }
@@ -259,6 +277,21 @@ class _VictimActiveAlertScreenState extends State<VictimActiveAlertScreen>
         icon: const Icon(Icons.arrow_back),
         tooltip: 'Retour',
         onPressed: () async {
+          // ⚠️ IMPORTANT : Arrêter les enregistrements avant de quitter
+          try {
+            if (AppConstants.enableLogging) {
+              print('🛑 Arrêt des enregistrements avant retour au dashboard...');
+            }
+            await EvidenceService.instance.stopEvidenceRecording();
+            if (AppConstants.enableLogging) {
+              print('✅ Enregistrements arrêtés avec succès');
+            }
+          } catch (e) {
+            if (AppConstants.enableLogging) {
+              print('⚠️ Erreur arrêt enregistrements: $e');
+            }
+          }
+          
           try { await StorageService.instance.remove('current_alert_should_open'); } catch (_) {}
           if (mounted) {
             context.go(AppConstants.routeVictimDashboard);

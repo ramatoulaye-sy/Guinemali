@@ -27,6 +27,7 @@ import '../../protected_person/screens/victim_ngo_screen.dart';
 import '../../protected_person/screens/permissions_page.dart';
 import '../../protected_person/screens/victim_security_screen.dart';
 import '../../protected_person/screens/victim_map_screen.dart';
+import '../../protected_person/screens/proximity_alert_map_screen.dart';
 import '../../shared/screens/app_lock_screen.dart';
 import '../test_rpc_functions.dart';
 
@@ -70,6 +71,29 @@ class AppRouter {
       if (currentRoute == AppConstants.routeVictimActiveAlert) {
         print('✅ Accès autorisé à l\'écran d\'alerte active');
         return null;
+      }
+
+      // Vérifier si une notification de proximité a été cliquée
+      final pendingAlertNav = StorageService.instance.getString('pending_alert_navigation');
+      if (pendingAlertNav != null && pendingAlertNav.isNotEmpty && isLoggedIn) {
+        try {
+          final data = jsonDecode(pendingAlertNav);
+          final alertId = data['alert_id'];
+          final latitude = data['latitude'];
+          final longitude = data['longitude'];
+          
+          // Nettoyer le flag
+          StorageService.instance.remove('pending_alert_navigation');
+          
+          // Rediriger vers la carte de proximité
+          if (currentRoute != '/victim/proximity-alert') {
+            print('🗺️ Redirection vers alerte de proximité: $alertId');
+            return '/victim/proximity-alert?alert_id=$alertId&lat=$latitude&lng=$longitude';
+          }
+        } catch (e) {
+          print('❌ Erreur parsing pending_alert_navigation: $e');
+          StorageService.instance.remove('pending_alert_navigation');
+        }
       }
 
       // Si une alerte active existe ET est réellement active, rediriger vers l'écran d'alerte
@@ -322,6 +346,25 @@ class AppRouter {
         path: AppConstants.routeVictimLiveMap,
         name: 'victim_live_map',
         builder: (context, state) => const VictimMapScreen(),
+      ),
+
+      // Route de la carte d'alerte de proximité
+      GoRoute(
+        path: '/victim/proximity-alert',
+        name: 'victim_proximity_alert',
+        builder: (context, state) {
+          final alertId = state.uri.queryParameters['alert_id'] ?? '';
+          final lat = double.tryParse(state.uri.queryParameters['lat'] ?? '0') ?? 0.0;
+          final lng = double.tryParse(state.uri.queryParameters['lng'] ?? '0') ?? 0.0;
+          final victimName = state.uri.queryParameters['victim_name'];
+
+          return ProximityAlertMapScreen(
+            alertId: alertId,
+            alertLatitude: lat,
+            alertLongitude: lng,
+            victimName: victimName,
+          );
+        },
       ),
     ];
   }

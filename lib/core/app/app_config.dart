@@ -50,7 +50,7 @@ class AppConfig {
     return const [
       Locale('fr', 'GN'), // Français - Guinée
       Locale('en', 'GN'), // Anglais - Guinée
-      Locale('ff', 'GN'), // Fulani - Guinée
+      // Langues locales désactivées (non finalisées) : Soussou, Peulh, Malinké
     ];
   }
 

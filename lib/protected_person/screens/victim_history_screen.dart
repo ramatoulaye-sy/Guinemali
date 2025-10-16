@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../core/services/alert_service.dart';
+import '../../core/services/evidence_service.dart';
+import '../../core/services/storage_service.dart';
 import '../../core/constants/app_constants.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pdf/pdf.dart';
@@ -113,35 +116,100 @@ class _VictimHistoryScreenState extends State<VictimHistoryScreen> {
                               title: Text('Alerte ${id.toString().substring(0, 6)} • ${fmt.format(date)}', style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w700)),
                               subtitle: Text(lat != null && lon != null ? '📍 $lat, $lon' : 'Sans position', style: const TextStyle(color: Colors.black54)),
                               trailing: PopupMenuButton<String>(
+                                icon: const Icon(Icons.more_vert, color: AppConstants.primaryColor),
                                 onSelected: (v) async {
                                   if (v == 'open') {
+                                    // Sauvegarder l'ID de l'alerte pour redirection
+                                    await StorageService.instance.saveString(AppConstants.keyCurrentAlertId, id);
+                                    await StorageService.instance.saveString('current_alert_should_open', '1');
+                                    if (!mounted) return;
                                     context.push(AppConstants.routeVictimActiveAlert);
                                   } else if (v == 'evidences') {
-                                    // Optionnel: futur écran détails
+                                    // Naviguer vers l'écran des preuves de cette alerte
+                                    if (!mounted) return;
+                                    await _showEvidencesForAlert(id);
                                   } else if (v == 'report') {
                                     final report = await AlertService.instance.generateAlertReport(id);
                                     if (!mounted) return;
                                     showDialog(
                                       context: context,
                                       builder: (_) => AlertDialog(
-                                        title: const Text('Rapport'),
-                                        content: Text(report.toString()),
+                                        backgroundColor: AppConstants.primaryColor,
+                                        title: const Row(
+                                          children: [
+                                            Icon(Icons.description, color: Colors.white),
+                                            SizedBox(width: 8),
+                                            Text('Rapport détaillé', style: TextStyle(color: Colors.white)),
+                                          ],
+                                        ),
+                                        content: SingleChildScrollView(
+                                          child: Text(report.toString(), style: const TextStyle(color: Colors.white)),
+                                        ),
                                         actions: [
                                           TextButton(
                                             onPressed: () => Navigator.of(context).pop(),
-                                            child: const Text('Fermer'),
+                                            child: const Text('Fermer', style: TextStyle(color: Colors.white)),
                                           ),
                                         ],
                                       ),
                                     );
                                   } else if (v == 'pdf') {
                                     await _exportPdfForAlert(a);
+                                  } else if (v == 'share') {
+                                    await _shareAlert(a);
                                   }
                                 },
                                 itemBuilder: (_) => const [
-                                  PopupMenuItem(value: 'open', child: Text('Ouvrir')),
-                                  PopupMenuItem(value: 'report', child: Text('Rapport brut')),
-                                  PopupMenuItem(value: 'pdf', child: Text('Exporter PDF')),
+                                  PopupMenuItem(
+                                    value: 'open',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.open_in_new, size: 20, color: AppConstants.primaryColor),
+                                        SizedBox(width: 8),
+                                        Text('Ouvrir l\'alerte'),
+                                      ],
+                                    ),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'evidences',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.video_library, size: 20, color: Colors.orange),
+                                        SizedBox(width: 8),
+                                        Text('Voir les preuves'),
+                                      ],
+                                    ),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'report',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.description, size: 20, color: Colors.blue),
+                                        SizedBox(width: 8),
+                                        Text('Rapport détaillé'),
+                                      ],
+                                    ),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'pdf',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.picture_as_pdf, size: 20, color: Colors.red),
+                                        SizedBox(width: 8),
+                                        Text('Exporter PDF Gendarmerie'),
+                                      ],
+                                    ),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'share',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.share, size: 20, color: Colors.green),
+                                        SizedBox(width: 8),
+                                        Text('Partager'),
+                                      ],
+                                    ),
+                                  ),
                                 ],
                               ),
                             );
@@ -251,5 +319,138 @@ class _VictimHistoryScreenState extends State<VictimHistoryScreen> {
       backgroundColor: Colors.white,
       shape: StadiumBorder(side: BorderSide(color: AppConstants.primaryColor)),
     );
+  }
+
+  /// Affiche les preuves associées à une alerte
+  Future<void> _showEvidencesForAlert(String alertId) async {
+    try {
+      // Charger les preuves depuis le service
+      final evidences = await EvidenceService.instance.getEvidencesForAlert(alertId);
+      
+      if (!mounted) return;
+      
+      if (evidences.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Aucune preuve enregistrée pour cette alerte'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+      
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.white,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (context) => Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.video_library, color: AppConstants.primaryColor),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Preuves de l\'alerte',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppConstants.primaryColor,
+                    ),
+                  ),
+                ],
+              ),
+              const Divider(height: 20),
+              ...evidences.map((evidence) {
+                final type = evidence['type'] ?? 'unknown';
+                IconData icon = Icons.insert_drive_file;
+                Color color = Colors.grey;
+                
+                if (type == 'audio') {
+                  icon = Icons.audiotrack;
+                  color = AppConstants.primaryColor;
+                } else if (type == 'video') {
+                  icon = Icons.videocam;
+                  color = AppConstants.secondaryColor;
+                } else if (type == 'photo') {
+                  icon = Icons.camera_alt;
+                  color = Colors.orange;
+                }
+                
+                return ListTile(
+                  leading: Icon(icon, color: color),
+                  title: Text(type.toUpperCase()),
+                  subtitle: Text(evidence['file_path'] ?? 'Fichier'),
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    // Naviguer vers l'écran des preuves
+                    context.push(AppConstants.routeVictimEvidence);
+                  },
+                );
+              }).toList(),
+            ],
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  /// Partage les détails d'une alerte
+  Future<void> _shareAlert(Map<String, dynamic> alert) async {
+    try {
+      final id = (alert['id'] ?? '').toString();
+      final dateStr = alert['timestamp'] ?? alert['time'] ?? DateTime.now().toIso8601String();
+      final date = DateTime.tryParse(dateStr) ?? DateTime.now();
+      final fmt = DateFormat('dd/MM/yyyy HH:mm');
+      final lat = alert['latitude'];
+      final lon = alert['longitude'];
+      final status = (alert['status'] ?? alert['statut'] ?? 'active').toString();
+      
+      final shareText = '''
+🚨 ALERTE GUINEMALI
+
+ID: ${id.substring(0, 8)}
+Date: ${fmt.format(date)}
+Statut: ${status.toUpperCase()}
+
+📍 Position:
+${lat != null && lon != null ? 'Latitude: $lat\nLongitude: $lon\n\nGoogle Maps: https://www.google.com/maps?q=$lat,$lon' : 'Position non disponible'}
+
+---
+Rapport généré par Guinemali
+Application de protection des victimes
+''';
+
+      // Copier dans le presse-papiers
+      await Clipboard.setData(ClipboardData(text: shareText));
+      
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✅ Détails de l\'alerte copiés dans le presse-papiers'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 }
