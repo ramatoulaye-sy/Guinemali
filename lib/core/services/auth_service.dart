@@ -444,43 +444,93 @@ class AuthService {
         return testUser;
       }
       
-      // MODE NORMAL - Utiliser Supabase Auth
-      final synthesizedEmail = '$normalizedPseudo@gmail.com';
-      final synthesizedPassword = '${loginData.pin}_$normalizedPseudo';
-      print('🔐 Connexion via Supabase Auth: $synthesizedEmail');
-      await _supabase.signInWithEmail(
-        email: synthesizedEmail,
-        password: synthesizedPassword,
-      );
+      // MODE NORMAL - Essayer Supabase Auth d'abord, puis fallback sur connexion directe
+      UserModel? userModel;
+      
+      try {
+        final synthesizedEmail = '$normalizedPseudo@gmail.com';
+        final synthesizedPassword = '${loginData.pin}_$normalizedPseudo';
+        print('🔐 Tentative de connexion via Supabase Auth: $synthesizedEmail');
+        
+        await _supabase.signInWithEmail(
+          email: synthesizedEmail,
+          password: synthesizedPassword,
+        );
 
-      // Récupérer le profil utilisateur lié à l'auth.uid()
-      final authUser = _supabase.currentUser;
-      if (authUser == null) {
-        throw Exception('Session Auth introuvable après connexion');
+        // Récupérer le profil utilisateur lié à l'auth.uid()
+        final authUser = _supabase.currentUser;
+        if (authUser == null) {
+          throw Exception('Session Auth introuvable après connexion');
+        }
+
+        var userResponse = await _supabase.select(
+          'utilisateurs',
+          filters: {
+            'id': authUser.id,
+            'actif': true,
+          },
+          limit: 1,
+        );
+
+        if (userResponse == null || userResponse.isEmpty) {
+          // Créer un profil minimal si absent (migration douce)
+          final created = await _supabase.insert('utilisateurs', {
+            'id': authUser.id,
+            'pseudo': normalizedPseudo,
+            'prenom': normalizedPseudo,
+            'type_utilisateur': 'victime',
+            'actif': true,
+          });
+          userResponse = created;
+        }
+
+        userModel = UserModel.fromJson(userResponse.first);
+        print('✅ Connexion via Supabase Auth réussie');
+      } catch (authError) {
+        print('⚠️ Connexion Supabase Auth échouée: $authError');
+        print('🔄 Tentative de connexion directe (sans Auth)...');
+        
+        // FALLBACK: Vérifier si l'utilisateur existe dans la table avec le bon PIN
+        final hashedPin = _hashPin(loginData.pin);
+        
+        final userResponse = await _supabase.select(
+          'utilisateurs',
+          filters: {
+            'pseudo': normalizedPseudo,
+            'actif': true,
+          },
+          limit: 1,
+        );
+        
+        if (userResponse == null || userResponse.isEmpty) {
+          // Incrémenter le compteur d'échecs
+          await _storage.setInt(keyAttempts, failedAttempts + 1);
+          if (failedAttempts + 1 >= maxAttempts) {
+            final lockUntil = DateTime.now().add(Duration(seconds: cooldownSeconds));
+            await _storage.saveString(keyLockUntil, lockUntil.toIso8601String());
+          }
+          throw Exception('Pseudo ou PIN incorrect');
+        }
+        
+        final userData = userResponse.first;
+        final storedHashedPin = userData['pin_chiffre'];
+        
+        if (storedHashedPin != hashedPin) {
+          // PIN incorrect
+          await _storage.setInt(keyAttempts, failedAttempts + 1);
+          if (failedAttempts + 1 >= maxAttempts) {
+            final lockUntil = DateTime.now().add(Duration(seconds: cooldownSeconds));
+            await _storage.saveString(keyLockUntil, lockUntil.toIso8601String());
+          }
+          throw Exception('Pseudo ou PIN incorrect');
+        }
+        
+        // PIN correct, créer le UserModel
+        userModel = UserModel.fromJson(userData);
+        print('✅ Connexion directe réussie (sans Auth)');
       }
-
-      var userResponse = await _supabase.select(
-        'utilisateurs',
-        filters: {
-          'id': authUser.id,
-          'actif': true,
-        },
-        limit: 1,
-      );
-
-      if (userResponse == null || userResponse.isEmpty) {
-        // Créer un profil minimal si absent (migration douce)
-        final created = await _supabase.insert('utilisateurs', {
-          'id': authUser.id,
-          'pseudo': normalizedPseudo,
-          'prenom': normalizedPseudo,
-          'type_utilisateur': 'victime',
-          'actif': true,
-        });
-        userResponse = created;
-      }
-
-      final userModel = UserModel.fromJson(userResponse.first);
+      
+      // userModel ne peut jamais être null ici grâce au try-catch
       _currentUser = userModel;
 
       // Mettre à jour la dernière connexion avec la fonction RPC existante
