@@ -1353,6 +1353,7 @@ class _PostCard extends StatelessWidget {
                     onPressed: userId.isEmpty ? null : () => forum.toggleLike(postId: post.id, userId: userId),
                   ),
                 ),
+                // TODO: Afficher les avatars des likeurs (temporairement désactivé)
                 Text(post.likedBy.length.toString(), style: const TextStyle(color: Colors.black54)),
                 const SizedBox(width: 12),
                 IconButton(
@@ -1409,6 +1410,7 @@ class _PostCard extends StatelessWidget {
     if (d.inHours < 24) return '${d.inHours} h';
     return '${d.inDays} j';
   }
+
 
   int _countComments(ForumPost p) {
     int total = 0;

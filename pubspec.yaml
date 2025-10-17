@@ -148,6 +148,8 @@ flutter:
   # Assets pour l'application Guinèmali
   assets:
     - assets/images/
+    - assets/resources/
+    - assets/resources/videos/
     # Remove or re-add entries below only if the directories exist
 
   # Configuration gen_l10n

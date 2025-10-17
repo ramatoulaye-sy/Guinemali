@@ -81,7 +81,13 @@ class ForumPost {
     }).toList();
     
     final likedBy = {...(((row['liked_by'] as List?) ?? []).cast<String>())};
-    final comments = <ForumComment>[]; // À hydrater si nécessaire
+    
+    // 🔥 PARSER LES COMMENTAIRES DEPUIS SUPABASE
+    final commentsList = (row['comments'] as List?) ?? [];
+    final comments = commentsList.map((c) {
+      final Map<String, dynamic> commentMap = (c as Map).cast<String, dynamic>();
+      return ForumComment.fromJson(commentMap);
+    }).toList();
     
     return ForumPost(
       id: row['id'] as String,
@@ -204,7 +210,7 @@ class CommunityForumService with ChangeNotifier {
       print('📡 Exécution SELECT sur forum_posts...');
       final rows = await SupabaseService.instance.select(
         'forum_posts',
-        columns: 'id, author_id, author_name, category, text, medias, created_at, liked_by',
+        columns: 'id, author_id, author_name, category, text, medias, created_at, liked_by, comments', // 🔥 AJOUTER COMMENTS
         orderBy: 'created_at', 
         ascending: false,
         limit: 50, // Charger les 50 derniers posts
@@ -451,6 +457,7 @@ class CommunityForumService with ChangeNotifier {
         'medias': remoteMedias,
         'created_at': post.createdAt.toIso8601String(),
         'liked_by': post.likedBy.toList(),
+        'comments': post.comments.map((c) => c.toJson()).toList(), // 🔥 AJOUTER LES COMMENTAIRES
         'moderation': post.moderation ?? 'pending',
         'anonymous': post.anonymous,
         'hide_avatar': post.hideAvatar,
