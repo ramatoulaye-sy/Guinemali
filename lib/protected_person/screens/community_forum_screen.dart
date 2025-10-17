@@ -2383,8 +2383,17 @@ class _PostAuthorAvatar extends StatelessWidget {
     return FutureBuilder<dynamic>(
       future: SupabaseService.instance.select('utilisateurs', columns: 'photo_url', filters: {'id': authorId}),
       builder: (context, snapshot) {
+        // Gérer les erreurs silencieusement
+        if (snapshot.hasError) {
+          return const CircleAvatar(
+            radius: 16,
+            backgroundColor: Color(0xFFee82ee),
+            child: Icon(Icons.person, size: 18, color: Colors.white),
+          );
+        }
+        
         final list = snapshot.data as List<dynamic>?;
-        final url = (list != null && list.isNotEmpty)
+        final url = (list != null && list.isNotEmpty && list.first != null && list.first is Map)
             ? (list.first['photo_url'] as String?)
             : null;
         return CircleAvatar(
@@ -2413,8 +2422,17 @@ class _CommentAuthorAvatar extends StatelessWidget {
     return FutureBuilder<dynamic>(
       future: SupabaseService.instance.select('utilisateurs', columns: 'photo_url', filters: {'id': authorId}),
       builder: (context, snapshot) {
+        // Gérer les erreurs silencieusement
+        if (snapshot.hasError) {
+          return const CircleAvatar(
+            radius: 14,
+            backgroundColor: Color(0xFFee82ee),
+            child: Icon(Icons.person, size: 16, color: Colors.white),
+          );
+        }
+        
         final list = snapshot.data as List<dynamic>?;
-        final url = (list != null && list.isNotEmpty)
+        final url = (list != null && list.isNotEmpty && list.first != null && list.first is Map)
             ? (list.first['photo_url'] as String?)
             : null;
         return CircleAvatar(

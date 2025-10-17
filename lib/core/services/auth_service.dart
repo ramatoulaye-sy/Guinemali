@@ -9,6 +9,7 @@ import '../models/auth_models.dart' as auth_models;
 import '../constants/app_constants.dart';
 import 'supabase_service.dart';
 import 'storage_service.dart';
+import 'community_forum_service.dart';
 
 /// Service d'authentification pour Guinèmali
 /// Gère l'inscription, la connexion et la gestion des sessions utilisateur
@@ -543,6 +544,15 @@ class AuthService {
       await _storage.setInt(keyAttempts, 0);
       await _storage.remove(keyLockUntil);
 
+      // Invalider le cache forum pour forcer le rechargement des posts
+      try {
+        final forumService = CommunityForumService.instance;
+        forumService.invalidateCache();
+        print('🗑️ Cache forum invalidé lors de la connexion');
+      } catch (e) {
+        print('⚠️ Erreur invalidation cache forum: $e');
+      }
+
       // Journaliser la connexion
       await _logAction('connexion', {
         'pseudo': normalizedPseudo,
@@ -575,6 +585,15 @@ class AuthService {
 
       // Déconnexion de Supabase
       await _supabase.signOut();
+
+      // Invalider le cache forum lors de la déconnexion
+      try {
+        final forumService = CommunityForumService.instance;
+        forumService.invalidateCache();
+        print('🗑️ Cache forum invalidé lors de la déconnexion');
+      } catch (e) {
+        print('⚠️ Erreur invalidation cache forum: $e');
+      }
 
       // Nettoyer les données locales
       await _clearUserData();

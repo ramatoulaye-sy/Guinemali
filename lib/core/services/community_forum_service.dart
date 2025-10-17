@@ -174,6 +174,13 @@ class CommunityForumService with ChangeNotifier {
 
   List<ForumPost> get posts => List.unmodifiable(_posts);
 
+  /// Invalider le cache (à appeler lors de la déconnexion ou changement d'utilisateur)
+  void invalidateCache() {
+    print('🗑️ Invalidation du cache forum');
+    _loaded = false;
+    _posts = [];
+  }
+
   /// Forcer le rechargement depuis Supabase
   Future<void> reload() async {
     print('🔄 FORCE RELOAD demandé, reset _loaded flag');
@@ -249,6 +256,8 @@ class CommunityForumService with ChangeNotifier {
   }
 
   Future<List<ForumPost>> listPosts() async {
+    // TOUJOURS forcer le rechargement depuis Supabase
+    _loaded = false;
     await _ensureLoaded();
     // tri desc par date
     _posts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -398,24 +407,41 @@ class CommunityForumService with ChangeNotifier {
 
   Future<void> _persistToSupabase(ForumPost post) async {
     try {
+      print('📤 Début upload post vers Supabase: ${post.id}');
       await SupabaseService.ensureInitialized();
       final List<Map<String, dynamic>> remoteMedias = [];
+      
+      // Upload des médias
+      if (post.medias.isNotEmpty) {
+        print('📎 Upload de ${post.medias.length} média(s)...');
+      }
+      
       for (final m in post.medias) {
         String url = m.localPath;
         if (!m.localPath.startsWith('http')) {
+          print('📤 Upload fichier local: ${m.localPath}');
           final bytes = await _readBytesSafe(m.localPath);
+          if (bytes.isEmpty) {
+            print('⚠️ Fichier vide ou illisible: ${m.localPath}');
+            continue;
+          }
           final filename = _basename(m.localPath);
           final path = '${post.authorId}/${post.id}/$filename';
+          print('📤 Upload vers: $_bucket/$path (${bytes.length} bytes)');
+          
           url = await SupabaseService.instance.uploadFile(
             bucket: _bucket,
             path: path,
             file: bytes,
             metadata: {'kind': m.kind},
           );
+          print('✅ Média uploadé: $url');
         }
         remoteMedias.add({'kind': m.kind, 'url': url});
       }
 
+      // Créer le post dans Supabase
+      print('📤 Insertion post dans forum_posts...');
       await SupabaseService.instance.upsert('forum_posts', {
         'id': post.id,
         'author_id': post.authorId,
@@ -429,6 +455,7 @@ class CommunityForumService with ChangeNotifier {
         'anonymous': post.anonymous,
         'hide_avatar': post.hideAvatar,
       }, onConflict: 'id', ignoreDuplicates: true);
+      print('✅ Post sauvegardé dans Supabase: ${post.id}');
 
       // Mettre à jour le cache local avec les URLs uploadées si besoin
       bool changed = false;
@@ -444,7 +471,9 @@ class CommunityForumService with ChangeNotifier {
         await _persist();
         notifyListeners();
       }
-    } catch (_) {
+    } catch (e, stackTrace) {
+      print('❌ ERREUR upload post vers Supabase: $e');
+      print('❌ Stack trace: $stackTrace');
       // offline: on gardera le cache et on réessaiera plus tard si nécessaire
     }
   }
@@ -475,6 +504,18 @@ class CommunityForumService with ChangeNotifier {
     }
     await _persist();
     notifyListeners();
+
+    // 🔥 SYNCHRONISER avec Supabase
+    try {
+      await SupabaseService.ensureInitialized();
+      await SupabaseService.instance.update('forum_posts', {
+        'liked_by': p.likedBy.toList(),
+      }, idColumn: 'id', idValue: postId);
+      print('✅ Like synchronisé avec Supabase pour post $postId');
+    } catch (e) {
+      print('⚠️ Erreur synchronisation like: $e');
+      // Continuer même si Supabase échoue (offline mode)
+    }
 
     // Notification Supabase quand un like est ajouté par une autre personne
     if (!wasLiked && userId != p.authorId) {
@@ -513,12 +554,26 @@ class CommunityForumService with ChangeNotifier {
     await _persist();
     notifyListeners();
 
-    // Notifications: commentaire sur le post, ou réponse à un commentaire
+    // 🔥 SYNCHRONISER avec Supabase
+    try {
+      await SupabaseService.ensureInitialized();
+      final commentsJson = p.comments.map((c) => c.toJson()).toList();
+      await SupabaseService.instance.update('forum_posts', {
+        'comments': commentsJson,
+      }, idColumn: 'id', idValue: postId);
+      print('✅ Commentaire synchronisé avec Supabase pour post $postId');
+    } catch (e) {
+      print('⚠️ Erreur synchronisation commentaire: $e');
+      // Continuer même si Supabase échoue (offline mode)
+    }
+
+    // Notifications: commentaire sur le post, ou reponse a un commentaire
     if (parentCommentId == null) {
       if (authorId != p.authorId) {
-        _notify(kind: 'comment',
+        _notify(
+          kind: 'comment',
           title: 'Nouveau commentaire',
-          message: 'Quelqu’un a commenté votre post',
+          message: 'Quelqu\'un a commente votre post',
           postId: p.id,
           userId: p.authorId,
         );
@@ -526,9 +581,10 @@ class CommunityForumService with ChangeNotifier {
     } else {
       final parent = _findComment(p.comments, parentCommentId);
       if (parent != null && authorId != parent.authorId) {
-        _notify(kind: 'reply',
-          title: 'Nouvelle réponse',
-          message: 'Quelqu’un a répondu à votre commentaire',
+        _notify(
+          kind: 'reply',
+          title: 'Nouvelle reponse',
+          message: 'Quelqu\'un a repondu a votre commentaire',
           postId: p.id,
           userId: parent.authorId,
         );
@@ -556,10 +612,24 @@ class CommunityForumService with ChangeNotifier {
     notifyListeners();
     await _persist();
 
+    // 🔥 SYNCHRONISER avec Supabase
+    try {
+      await SupabaseService.ensureInitialized();
+      final commentsJson = p.comments.map((c) => c.toJson()).toList();
+      await SupabaseService.instance.update('forum_posts', {
+        'comments': commentsJson,
+      }, idColumn: 'id', idValue: postId);
+      print('✅ Like de commentaire synchronisé avec Supabase pour post $postId');
+    } catch (e) {
+      print('⚠️ Erreur synchronisation like de commentaire: $e');
+      // Continuer même si Supabase échoue (offline mode)
+    }
+
     if (!wasLiked && userId != c.authorId) {
-      _notify(kind: 'like',
-        title: 'Votre commentaire a été aimé',
-        message: 'Quelqu’un a aimé votre commentaire',
+      _notify(
+        kind: 'like',
+        title: 'Votre commentaire a ete aime',
+        message: 'Quelqu\'un a aime votre commentaire',
         postId: p.id,
         userId: c.authorId,
       );
@@ -581,10 +651,19 @@ class CommunityForumService with ChangeNotifier {
     c.text = newText;
     await _persist();
     notifyListeners();
+    
+    // 🔥 SYNCHRONISER avec Supabase (mise à jour de la colonne JSON comments)
     try {
       await SupabaseService.ensureInitialized();
-      await SupabaseService.instance.update('forum_comments', {'text': newText}, idColumn: 'id', idValue: commentId);
-    } catch (_) {}
+      final p = _posts[pIndex];
+      final commentsJson = p.comments.map((c) => c.toJson()).toList();
+      await SupabaseService.instance.update('forum_posts', {
+        'comments': commentsJson,
+      }, idColumn: 'id', idValue: postId);
+      print('✅ Édition de commentaire synchronisée avec Supabase pour post $postId');
+    } catch (e) {
+      print('⚠️ Erreur synchronisation édition commentaire: $e');
+    }
   }
 
   /// Supprime un commentaire (ou réponse) d'un post si l'utilisatrice en est l'autrice
@@ -604,12 +683,17 @@ class CommunityForumService with ChangeNotifier {
     await _persist();
     notifyListeners();
 
-    // Tentative côté Supabase (si table existe, à adapter plus tard)
+    // 🔥 SYNCHRONISER avec Supabase (mise à jour de la colonne JSON comments)
     try {
       await SupabaseService.ensureInitialized();
-      await SupabaseService.instance.delete('forum_comments', idColumn: 'id', idValue: commentId);
-    } catch (_) {
-      // Ignorer en offline ou si table absente
+      final p = _posts[postIndex];
+      final commentsJson = p.comments.map((c) => c.toJson()).toList();
+      await SupabaseService.instance.update('forum_posts', {
+        'comments': commentsJson,
+      }, idColumn: 'id', idValue: postId);
+      print('✅ Suppression de commentaire synchronisée avec Supabase pour post $postId');
+    } catch (e) {
+      print('⚠️ Erreur synchronisation suppression commentaire: $e');
     }
   }
 
